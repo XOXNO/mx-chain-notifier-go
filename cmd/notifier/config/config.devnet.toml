@@ -129,37 +129,37 @@
 
     # The exchange which holds all logs and events
     [AzureServiceBus.EventsExchange]
-        Topic = "mvx_events_raw"
+        Topic = "mvx_events_raw_devnet"
         Enabled = true
 
     # The exchange which holds revert events
     [AzureServiceBus.RevertEventsExchange]
-        Topic = "revert_events"
+        Topic = "revert_events_devnet"
         Enabled = false
 
     # The exchange which holds finalized block events
     [AzureServiceBus.FinalizedEventsExchange]
-        Topic = "finalized_events"
+        Topic = "finalized_events_devnet"
         Enabled = false
 
     # The exchange which holds block txs events
     [AzureServiceBus.BlockTxsExchange]
-        Topic = "block_txs"
+        Topic = "block_txs_devnet"
         Enabled = false
 
     # The exchange which holds block scrs events
     [AzureServiceBus.BlockScrsExchange]
-        Topic = "block_scrs"
+        Topic = "block_scrs_devnet"
         Enabled = false
 
     # The exchange which holds block events with additional info
     [AzureServiceBus.BlockEventsExchange]
-        Topic = "block_events"
+        Topic = "block_events_devnet"
         Enabled = false
     
     # The exchange which holds accounts altered with additional info
     [AzureServiceBus.AlteredAccountsExchange]
-        Topic = "mvx_altered_accounts"
+        Topic = "mvx_altered_accounts_devnet"
         Enabled = true
 
 [AzureKeyVault]
@@ -167,7 +167,7 @@
     Enabled = true
 
     # KeyVault is the name of the Azure KeyVault that holds the secrets
-    KeyVaultUrl = "https://xoxno.vault.azure.net/"
+    KeyVaultUrl = "https://xoxno-dev.vault.azure.net/"
 
     # KeyVaultApiUsername is the name of the secret in the KeyVault that holds the username for the ConnectorApi
     KeyVaultApiUsername = 'notifier-squad-user'
@@ -178,4 +178,4 @@
     # KeyVaultServiceBusUrl is the name of the secret in the KeyVault that holds the connection string for the ServiceBus instance
     KeyVaultServiceBus = 'service-bus'
     # KeyVaultRedisUrl is the name of the secret in the KeyVault that holds the url for the Redis instance
-    KeyVaultRedisUrl = 'NotifierRedisURL'
+    KeyVaultRedisUrl = 'redis-full-path'
