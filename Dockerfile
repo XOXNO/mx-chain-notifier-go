@@ -16,4 +16,4 @@ EXPOSE 8080 22111 80 443 5000
 
 WORKDIR /multiversx
 
-CMD ["./notifier", "--publisher-type", "servicebus"]
+CMD ["./notifier", "--publisher-type", "servicebus", "--log-level", "*:NONE"]
