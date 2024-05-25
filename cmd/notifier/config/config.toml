@@ -178,4 +178,4 @@
     # KeyVaultServiceBusUrl is the name of the secret in the KeyVault that holds the connection string for the ServiceBus instance
     KeyVaultServiceBus = 'service-bus'
     # KeyVaultRedisUrl is the name of the secret in the KeyVault that holds the url for the Redis instance
-    KeyVaultRedisUrl = 'NotifierRedisURL'
+    KeyVaultRedisUrl = 'redis-full-path'
