@@ -22,10 +22,10 @@ jobs:
 
     steps:
       - name: Checkout to the branch
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Azure Login
-        uses: azure/login@v1
+        uses: azure/login@v2
         with:
           client-id: ${{ secrets.XOXNONOTIFIERMAINNET_AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.XOXNONOTIFIERMAINNET_AZURE_TENANT_ID }}
@@ -41,7 +41,5 @@ jobs:
           containerAppName: xoxno-notifier-mainnet
           resourceGroup: XOXNO
           imageToBuild: xoxno.azurecr.io/xoxno-notifier-mainnet:${{ github.sha }}
-          _buildArgumentsKey_: |
-            _buildArgumentsValues_
 
 
