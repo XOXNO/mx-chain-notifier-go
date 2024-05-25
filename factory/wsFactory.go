@@ -23,6 +23,8 @@ func CreateWSHandler(apiType string, wsDispatcher dispatcher.Dispatcher, marshal
 	switch apiType {
 	case common.MessageQueuePublisherType:
 		return &disabled.WSHandler{}, nil
+	case common.ServiceBusQueuePublisherType:
+		return &disabled.WSHandler{}, nil
 	case common.WSPublisherType:
 		return createWSHandler(wsDispatcher, marshaller)
 	default:
