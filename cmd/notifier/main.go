@@ -217,6 +217,8 @@ func handleAPIType(ctx *cli.Context) (string, error) {
 	switch apiType {
 	case "rabbit-api":
 		return common.MessageQueuePublisherType, nil
+	case "servicebus":
+		return common.ServiceBusQueuePublisherType, nil
 	case "notifier":
 		return common.WSPublisherType, nil
 	default:
