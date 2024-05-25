@@ -6,6 +6,9 @@ const (
 
 	// MessageQueuePublisherType defines a webserver api type using a message queueing service
 	MessageQueuePublisherType string = "rabbitmq"
+
+	// MessageQueuePublisherType defines a webserver api type using a message queueing service
+	ServiceBusQueuePublisherType string = "servicebus"
 )
 
 const (
@@ -34,6 +37,8 @@ const (
 
 	// BlockScrs defines the subscription event type for block scrs
 	BlockScrs string = "block_scrs"
+
+	AlteredAccountsEvent string = "altered_accounts"
 )
 
 const (

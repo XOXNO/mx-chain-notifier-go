@@ -35,6 +35,10 @@ func (dp *Publisher) BroadcastScrs(_ data.BlockScrs) {
 func (dp *Publisher) BroadcastBlockEventsWithOrder(_ data.BlockEventsWithOrder) {
 }
 
+// BroadcastBlockEventsWithOrder does nothing
+func (dp *Publisher) BroadcastAlteredAccounts(_ data.AlteredAccountsEvent) {
+}
+
 // Close returns nil
 func (dp *Publisher) Close() error {
 	return nil

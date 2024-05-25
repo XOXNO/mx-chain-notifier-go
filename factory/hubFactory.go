@@ -13,6 +13,8 @@ func CreateHub(apiType string) (dispatcher.Hub, error) {
 	switch apiType {
 	case common.MessageQueuePublisherType:
 		return &disabled.Hub{}, nil
+	case common.ServiceBusQueuePublisherType:
+		return &disabled.Hub{}, nil
 	case common.WSPublisherType:
 		return createHub()
 	default:

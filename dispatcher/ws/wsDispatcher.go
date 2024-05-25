@@ -193,6 +193,27 @@ func (wd *websocketDispatcher) ScrsEvent(event data.BlockScrs) {
 	wd.send <- wsEventBytes
 }
 
+// AlteredAccounts receives a block scrs event and process it before pushing to socket
+func (wd *websocketDispatcher) AlteredAccounts(event data.AlteredAccountsEvent) {
+	eventBytes, err := wd.marshaller.Marshal(event)
+	if err != nil {
+		log.Error("failure marshalling events", "err", err.Error())
+		return
+	}
+	wsEvent := &data.WebSocketEvent{
+		Type: common.AlteredAccountsEvent,
+		Data: eventBytes,
+	}
+	wsEventBytes, err := wd.marshaller.Marshal(wsEvent)
+	if err != nil {
+		log.Error("failure marshalling events", "err", err.Error())
+		return
+	}
+
+	wd.send <- wsEventBytes
+}
+
+
 // writePump listens on the send-channel and pushes data on the socket stream
 func (wd *websocketDispatcher) writePump() {
 	ticker := time.NewTicker(pingPeriod)

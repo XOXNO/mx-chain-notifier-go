@@ -8,6 +8,7 @@ import (
 	"github.com/multiversx/mx-chain-core-go/data/rewardTx"
 	"github.com/multiversx/mx-chain-core-go/data/smartContractResult"
 	"github.com/multiversx/mx-chain-core-go/data/transaction"
+	"github.com/multiversx/mx-chain-core-go/data/alteredAccount"
 )
 
 // WebSocketEvent defines a websocket event
@@ -23,6 +24,7 @@ type Event struct {
 	Topics     [][]byte `json:"topics"`
 	Data       []byte   `json:"data"`
 	TxHash     string   `json:"txHash"`
+	OriginalTxHash string   `json:"originalTxHash"`
 }
 
 // BlockEvents holds events data for a block
@@ -94,4 +96,19 @@ type NotifierReceipt struct {
 	*receipt.Receipt
 	outport.FeeInfo
 	ExecutionOrder int
+}
+
+// AlteredAccounts holds events data for altered accounts in a block
+type AlteredAccountsEvent struct {
+	Hash      string                           `json:"hash"`
+	ShardID   uint32                           `json:"shardId"`
+	TimeStamp uint64                           `json:"timestamp"`
+	Accounts  []*alteredAccount.AlteredAccount `json:"accounts"`
+}
+
+// Event holds event data
+type EventDuplicateCheck struct {
+	Address    []byte   `json:"address"`
+	Identifier []byte   `json:"identifier"`
+	Topics     [][]byte `json:"topics"`
 }

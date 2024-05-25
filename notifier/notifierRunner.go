@@ -63,7 +63,7 @@ func (nr *notifierRunner) Start() error {
 
 	statusMetricsHandler := metrics.NewStatusMetrics()
 
-	eventsInterceptor, err := factory.CreateEventsInterceptor(nr.configs.MainConfig.General)
+	eventsInterceptor, err := factory.CreateEventsInterceptor(nr.configs.MainConfig.General, lockService)
 	if err != nil {
 		return err
 	}

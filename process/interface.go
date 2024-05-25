@@ -10,6 +10,7 @@ import (
 // It makes sure that a duplicated entry is not processed multiple times.
 type LockService interface {
 	IsEventProcessed(ctx context.Context, blockHash string) (bool, error)
+	IsCrossShardConfirmation(ctx context.Context, originalTxHash string, event data.EventDuplicateCheck) (bool, error)
 	HasConnection(ctx context.Context) bool
 	IsInterfaceNil() bool
 }
@@ -71,6 +72,7 @@ type PublisherHandler interface {
 	PublishTxs(blockTxs data.BlockTxs)
 	PublishScrs(blockScrs data.BlockScrs)
 	PublishBlockEventsWithOrder(blockTxs data.BlockEventsWithOrder)
+	PublishAlteredAccounts(accounts data.AlteredAccountsEvent)
 	Close() error
 	IsInterfaceNil() bool
 }

@@ -33,6 +33,26 @@ func (rc *redisClientWrapper) Ping(ctx context.Context) (string, error) {
 	return rc.redis.Ping(ctx).Result()
 }
 
+func (rc *redisClientWrapper) AddEventToList(ctx context.Context, key string, value string, ttl time.Duration) (int64, error) {
+	index, err := rc.redis.SAdd(ctx, key, value).Result()
+	if err != nil {
+		log.Error("could not add event to list", "key", key, "err", err.Error())
+		return 0, err
+	}
+
+	_, err = rc.redis.Expire(ctx, key, ttl).Result()
+	if err != nil {
+		log.Error("could not set expiration for key", "key", key, "err", err.Error())
+		return 0, err
+	}
+	return index, nil
+}
+
+// GetEventList will try to get the list of events from redis database
+func (rc *redisClientWrapper) HasEvent(ctx context.Context, key string, value string) (bool, error) {
+	return rc.redis.SIsMember(ctx, key, value).Result()
+}
+
 // IsConnected will check if Redis is connected
 func (rc *redisClientWrapper) IsConnected(ctx context.Context) bool {
 	pong, err := rc.Ping(context.Background())

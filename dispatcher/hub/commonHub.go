@@ -188,6 +188,25 @@ func (ch *commonHub) PublishScrs(blockScrs data.BlockScrs) {
 	}
 }
 
+// PublishAlteredAccounts will publish altered accounts to dispatcher
+func (ch *commonHub) PublishAlteredAccounts(accounts data.AlteredAccountsEvent) {
+	subscriptions := ch.subscriptionMapper.Subscriptions()
+
+	dispatchersMap := make(map[uuid.UUID]data.AlteredAccountsEvent)
+
+	for _, subscription := range subscriptions[common.AlteredAccountsEvent] {
+		dispatchersMap[subscription.DispatcherID] = accounts
+	}
+
+	ch.mutDispatchers.RLock()
+	defer ch.mutDispatchers.RUnlock()
+	for id, event := range dispatchersMap {
+		if d, ok := ch.dispatchers[id]; ok {
+			d.AlteredAccounts(event)
+		}
+	}
+}
+
 func (ch *commonHub) registerDispatcher(d dispatcher.EventDispatcher) {
 	ch.mutDispatchers.Lock()
 	defer ch.mutDispatchers.Unlock()

@@ -2,6 +2,7 @@ package process
 
 import (
 	"encoding/hex"
+	"context"
 
 	"github.com/multiversx/mx-chain-core-go/core"
 	"github.com/multiversx/mx-chain-core-go/core/check"
@@ -10,21 +11,25 @@ import (
 	"github.com/multiversx/mx-chain-core-go/data/smartContractResult"
 	"github.com/multiversx/mx-chain-core-go/data/transaction"
 	"github.com/multiversx/mx-chain-notifier-go/data"
+	"github.com/multiversx/mx-chain-core-go/data/alteredAccount"
 )
 
 // logEvent defines a log event associated with corresponding tx hash
 type logEvent struct {
-	EventHandler nodeData.EventHandler
-	TxHash       string
+	EventHandler 	nodeData.EventHandler
+	TxHash       	string
+	OriginalTxHash 	string
 }
 
 // ArgsEventsInterceptor defines the arguments needed for creating an events interceptor instance
 type ArgsEventsInterceptor struct {
 	PubKeyConverter core.PubkeyConverter
+	LockService     LockService
 }
 
 type eventsInterceptor struct {
 	pubKeyConverter core.PubkeyConverter
+	locker          LockService
 }
 
 // NewEventsInterceptor creates a new eventsInterceptor instance
@@ -35,6 +40,7 @@ func NewEventsInterceptor(args ArgsEventsInterceptor) (*eventsInterceptor, error
 
 	return &eventsInterceptor{
 		pubKeyConverter: args.PubKeyConverter,
+		locker:          args.LockService,
 	}, nil
 }
 
@@ -52,8 +58,14 @@ func (ei *eventsInterceptor) ProcessBlockEvents(eventsData *data.ArgsSaveBlockDa
 	if eventsData.Header == nil {
 		return nil, ErrNilBlockHeader
 	}
+	// Map each hash with the SC result, before processing the events so we can skip cross shard duplicate transfers by checking the hash
+	scrs := make(map[string]*smartContractResult.SmartContractResult)
+	for hash, scr := range eventsData.TransactionsPool.SmartContractResults {
+		scrs[hash] = scr.SmartContractResult
+	}
+	scrsWithOrder := eventsData.TransactionsPool.SmartContractResults
 
-	events := ei.getLogEventsFromTransactionsPool(eventsData.TransactionsPool.Logs)
+	events := ei.getLogEventsFromTransactionsPool(eventsData.TransactionsPool.Logs, scrs)
 
 	txs := make(map[string]*transaction.Transaction)
 	for hash, tx := range eventsData.TransactionsPool.Transactions {
@@ -61,25 +73,24 @@ func (ei *eventsInterceptor) ProcessBlockEvents(eventsData *data.ArgsSaveBlockDa
 	}
 	txsWithOrder := eventsData.TransactionsPool.Transactions
 
-	scrs := make(map[string]*smartContractResult.SmartContractResult)
-	for hash, scr := range eventsData.TransactionsPool.SmartContractResults {
-		scrs[hash] = scr.SmartContractResult
+	// Output as well the Altered Accounts
+	accounts := make([]*alteredAccount.AlteredAccount, 0)
+	for _, account := range eventsData.AlteredAccounts {
+		accounts = append(accounts, account)
 	}
-	scrsWithOrder := eventsData.TransactionsPool.SmartContractResults
-
 	return &data.InterceptorBlockData{
-		Hash:          hex.EncodeToString(eventsData.HeaderHash),
-		Body:          eventsData.Body,
-		Header:        eventsData.Header,
-		Txs:           txs,
-		TxsWithOrder:  txsWithOrder,
-		Scrs:          scrs,
-		ScrsWithOrder: scrsWithOrder,
-		LogEvents:     events,
+		Hash:            hex.EncodeToString(eventsData.HeaderHash),
+		Body:            eventsData.Body,
+		Header:          eventsData.Header,
+		Txs:             txs,
+		TxsWithOrder:    txsWithOrder,
+		Scrs:            scrs,
+		ScrsWithOrder:   scrsWithOrder,
+		LogEvents:       events,
+		AlteredAccounts: accounts,
 	}, nil
 }
-
-func (ei *eventsInterceptor) getLogEventsFromTransactionsPool(logs []*outport.LogData) []data.Event {
+func (ei *eventsInterceptor) getLogEventsFromTransactionsPool(logs []*outport.LogData, scrs map[string]*smartContractResult.SmartContractResult) []data.Event {
 	var logEvents []*logEvent
 	for _, logData := range logs {
 		if logData == nil {
@@ -88,15 +99,66 @@ func (ei *eventsInterceptor) getLogEventsFromTransactionsPool(logs []*outport.Lo
 		if check.IfNilReflect(logData.Log) {
 			continue
 		}
-
+		var tmpLogEvents []*logEvent
+		skipTransfers := false
 		for _, event := range logData.Log.Events {
+			eventIdentifier := string(event.Identifier)
+			originalTxHash := logData.GetTxHash()
+			scResult, exists := scrs[originalTxHash]
 
-			le := &logEvent{
-				EventHandler: event,
-				TxHash:       logData.TxHash,
+			// Check if the current TX is a smart contract result, if so get the original TxHash
+			if exists {
+				originalTxHash = hex.EncodeToString(scResult.GetOriginalTxHash())
 			}
 
-			logEvents = append(logEvents, le)
+			if eventIdentifier == core.SignalErrorOperation || eventIdentifier == core.InternalVMErrorsOperation {
+				if !exists {
+					skipTransfers = true
+				}
+				log.Debug("eventsInterceptor: received signalError or internalVMErrors event from log event",
+					"txHash", logData.TxHash,
+					"isSCResult", exists,
+					"skipTransfers", skipTransfers,
+				)
+			}
+
+			// Skip duplicated transfers for cross shard confirmation
+			if eventIdentifier == core.BuiltInFunctionMultiESDTNFTTransfer || eventIdentifier == core.BuiltInFunctionESDTNFTTransfer || eventIdentifier == core.BuiltInFunctionESDTTransfer {
+				skipEvent, err := ei.locker.IsCrossShardConfirmation(context.Background(), originalTxHash, data.EventDuplicateCheck{
+					Address:    event.Address,
+					Identifier: event.Identifier,
+					Topics:     event.Topics,
+				})
+				if err != nil {
+					log.Info("eventsInterceptor: failed to check cross shard confirmation", "error", err)
+					continue
+				}
+				if skipEvent {
+					log.Info("eventsInterceptor: skip cross shard confirmation event", "txHash", logData.TxHash, "originalTxHash", originalTxHash, "eventIdentifier", eventIdentifier)
+					continue
+				}
+			}
+
+			le := &logEvent{
+				EventHandler:   event,
+				TxHash:         logData.TxHash,
+				OriginalTxHash: originalTxHash,
+			}
+
+			tmpLogEvents = append(tmpLogEvents, le)
+		}
+		if skipTransfers {
+			var filteredItems []*logEvent
+			for _, item := range tmpLogEvents {
+				identifier := string(item.EventHandler.GetIdentifier())
+				if identifier == core.BuiltInFunctionMultiESDTNFTTransfer || identifier == core.BuiltInFunctionESDTNFTTransfer || identifier == core.BuiltInFunctionESDTTransfer {
+					continue
+				}
+				filteredItems = append(filteredItems, item)
+			}
+			logEvents = append(logEvents, filteredItems...)
+		} else {
+			logEvents = append(logEvents, tmpLogEvents...)
 		}
 	}
 
@@ -109,26 +171,50 @@ func (ei *eventsInterceptor) getLogEventsFromTransactionsPool(logs []*outport.Lo
 		if event == nil || check.IfNil(event.EventHandler) {
 			continue
 		}
-
 		bech32Address, err := ei.pubKeyConverter.Encode(event.EventHandler.GetAddress())
 		if err != nil {
 			log.Error("eventsInterceptor: failed to decode event address", "error", err)
 			continue
 		}
 		eventIdentifier := string(event.EventHandler.GetIdentifier())
+		topics := event.EventHandler.GetTopics()
 
-		log.Debug("eventsInterceptor: received event from address",
-			"address", bech32Address,
-			"identifier", eventIdentifier,
-		)
+		// Split the multi ESDTNFTTransfer in batches so their are emmited one by one (works best for processing them separate in case of failures on one of them)
+		if eventIdentifier == core.BuiltInFunctionMultiESDTNFTTransfer && len(topics) > 4 {
+			topicsLen := len(topics)
+			iterations := (topicsLen - 1) / 3
+			receiver := topics[topicsLen-1]
 
-		events = append(events, data.Event{
-			Address:    bech32Address,
-			Identifier: eventIdentifier,
-			Topics:     event.EventHandler.GetTopics(),
-			Data:       event.EventHandler.GetData(),
-			TxHash:     event.TxHash,
-		})
+			for i := 0; i < iterations; i++ {
+				newTopics := make([][]byte, 0, 4)
+				// identifier
+				newTopics = append(newTopics, topics[i*3])
+				// nonce
+				newTopics = append(newTopics, topics[1+i*3])
+				// amount
+				newTopics = append(newTopics, topics[2+i*3])
+				// receiver
+				newTopics = append(newTopics, receiver)
+
+				events = append(events, data.Event{
+					Address:        bech32Address,
+					Identifier:     eventIdentifier,
+					Topics:         newTopics,
+					Data:           event.EventHandler.GetData(),
+					TxHash:         event.TxHash,
+					OriginalTxHash: event.OriginalTxHash,
+				})
+			}
+		} else {
+			events = append(events, data.Event{
+				Address:        bech32Address,
+				Identifier:     eventIdentifier,
+				Topics:         topics,
+				Data:           event.EventHandler.GetData(),
+				TxHash:         event.TxHash,
+				OriginalTxHash: event.OriginalTxHash,
+			})
+		}
 	}
 
 	return events

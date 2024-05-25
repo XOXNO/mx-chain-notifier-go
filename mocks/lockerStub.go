@@ -17,6 +17,11 @@ func (ls *LockerStub) IsEventProcessed(ctx context.Context, blockHash string) (b
 	return false, nil
 }
 
+func (ls *LockerStub) IsCrossShardConfirmation(ctx context.Context, originalTxHash string, event data.EventDuplicateCheck) (bool, error) {
+
+	return false, nil
+}
+
 // HasConnection -
 func (ls *LockerStub) HasConnection(ctx context.Context) bool {
 	if ls.HasConnectionCalled != nil {

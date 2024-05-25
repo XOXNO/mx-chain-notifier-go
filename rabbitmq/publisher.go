@@ -223,6 +223,20 @@ func (rp *rabbitMqPublisher) PublishBlockEventsWithOrder(blockTxs data.BlockEven
 	}
 }
 
+// PublishAlteredAccounts will publish altered accounts events to rabbitmq
+func (rp *rabbitMqPublisher) PublishAlteredAccounts(accounts data.AlteredAccountsEvent) {
+	accountsBytes, err := rp.marshaller.Marshal(accounts)
+	if err != nil {
+		log.Error("could not marshal accounts altered event", "err", err.Error())
+		return
+	}
+
+	err = rp.publishFanout(rp.cfg.AlteredAccountsExchange.Name, accountsBytes)
+	if err != nil {
+		log.Error("failed to publish full accounts altered events to rabbitMQ", "err", err.Error())
+	}
+}
+
 func (rp *rabbitMqPublisher) publishFanout(exchangeName string, payload []byte) error {
 	return rp.client.Publish(
 		exchangeName,

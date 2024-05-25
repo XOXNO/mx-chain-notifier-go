@@ -18,6 +18,7 @@ type EventDispatcher interface {
 	FinalizedEvent(event data.FinalizedBlock)
 	TxsEvent(event data.BlockTxs)
 	BlockEvents(event data.BlockEventsWithOrder)
+	AlteredAccounts(event data.AlteredAccountsEvent)
 	ScrsEvent(event data.BlockScrs)
 }
 
