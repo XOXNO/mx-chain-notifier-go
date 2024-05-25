@@ -7,7 +7,7 @@ on:
     branches: 
       [ add-azure-service-bus ]
     paths:
-    - 'Dockerfile.devnet/**'
+    - '**'
     - '.github/workflows/xoxno-notifier-devnet-AutoDeployTrigger-4e126791-d1a6-49b4-a66b-205363dff82f.yml'
 
   # Allow manual trigger 
@@ -22,10 +22,10 @@ jobs:
 
     steps:
       - name: Checkout to the branch
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Azure Login
-        uses: azure/login@v1
+        uses: azure/login@v2
         with:
           client-id: ${{ secrets.XOXNONOTIFIERDEVNET_AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.XOXNONOTIFIERDEVNET_AZURE_TENANT_ID }}
