@@ -104,8 +104,15 @@ func (w *webServer) Run() error {
 		return nil
 	}
 
-	engine := gin.Default()
+	gin.SetMode(gin.ReleaseMode)
+	engine := gin.New()
 	engine.Use(cors.Default())
+	engine.Use(gin.Recovery())
+	engine.GET("/", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "XOXNO is the best marketplace in the world!",
+		})
+	})
 
 	err = w.createGroups()
 	if err != nil {
