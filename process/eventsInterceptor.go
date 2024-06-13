@@ -1,24 +1,25 @@
 package process
 
 import (
-	"encoding/hex"
 	"context"
+	"encoding/hex"
+	"encoding/json"
 
 	"github.com/multiversx/mx-chain-core-go/core"
 	"github.com/multiversx/mx-chain-core-go/core/check"
 	nodeData "github.com/multiversx/mx-chain-core-go/data"
+	"github.com/multiversx/mx-chain-core-go/data/alteredAccount"
 	"github.com/multiversx/mx-chain-core-go/data/outport"
 	"github.com/multiversx/mx-chain-core-go/data/smartContractResult"
 	"github.com/multiversx/mx-chain-core-go/data/transaction"
 	"github.com/multiversx/mx-chain-notifier-go/data"
-	"github.com/multiversx/mx-chain-core-go/data/alteredAccount"
 )
 
 // logEvent defines a log event associated with corresponding tx hash
 type logEvent struct {
-	EventHandler 	nodeData.EventHandler
-	TxHash       	string
-	OriginalTxHash 	string
+	EventHandler   nodeData.EventHandler
+	TxHash         string
+	OriginalTxHash string
 }
 
 // ArgsEventsInterceptor defines the arguments needed for creating an events interceptor instance
@@ -101,6 +102,7 @@ func (ei *eventsInterceptor) getLogEventsFromTransactionsPool(logs []*outport.Lo
 		}
 		var tmpLogEvents []*logEvent
 		skipTransfers := false
+		duplicateTwiceSameBlock := make(map[string]bool)
 		for _, event := range logData.Log.Events {
 			eventIdentifier := string(event.Identifier)
 			originalTxHash := logData.GetTxHash()
@@ -124,18 +126,30 @@ func (ei *eventsInterceptor) getLogEventsFromTransactionsPool(logs []*outport.Lo
 
 			// Skip duplicated transfers for cross shard confirmation
 			if eventIdentifier == core.BuiltInFunctionMultiESDTNFTTransfer || eventIdentifier == core.BuiltInFunctionESDTNFTTransfer || eventIdentifier == core.BuiltInFunctionESDTTransfer {
-				skipEvent, err := ei.locker.IsCrossShardConfirmation(context.Background(), originalTxHash, data.EventDuplicateCheck{
+				event := data.EventDuplicateCheck{
 					Address:    event.Address,
 					Identifier: event.Identifier,
 					Topics:     event.Topics,
-				})
-				if err != nil {
-					log.Info("eventsInterceptor: failed to check cross shard confirmation", "error", err)
-					continue
 				}
-				if skipEvent {
-					log.Info("eventsInterceptor: skip cross shard confirmation event", "txHash", logData.TxHash, "originalTxHash", originalTxHash, "eventIdentifier", eventIdentifier)
-					continue
+				jsonData, err := json.Marshal(event)
+				if err != nil {
+					log.Error("could not marshal event", "err", err.Error())
+					return nil
+				}
+				hexData := hex.EncodeToString(jsonData)
+				_, isThere := duplicateTwiceSameBlock[originalTxHash + hexData]
+				if !isThere {
+					skipEvent, err := ei.locker.IsCrossShardConfirmation(context.Background(), originalTxHash, event)
+					// Save this as already seen in this logs block 
+					duplicateTwiceSameBlock[originalTxHash + hexData] = true
+					if err != nil {
+						log.Info("eventsInterceptor: failed to check cross shard confirmation", "error", err)
+						continue
+					}
+					if skipEvent {
+						log.Info("eventsInterceptor: skip cross shard confirmation event", "txHash", logData.TxHash, "originalTxHash", originalTxHash, "eventIdentifier", eventIdentifier)
+						continue
+					}
 				}
 			}
 
