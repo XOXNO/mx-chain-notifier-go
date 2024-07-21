@@ -46,7 +46,7 @@ func (nr *notifierRunner) Start() error {
 		return err
 	}
 
-	commonHub, err := factory.CreateHub(publisherType)
+	commonHub, err := factory.CreateHub("ws")
 	if err != nil {
 		return err
 	}
@@ -56,7 +56,7 @@ func (nr *notifierRunner) Start() error {
 		return err
 	}
 
-	wsHandler, err := factory.CreateWSHandler(publisherType, commonHub, externalMarshaller)
+	wsHandler, err := factory.CreateWSHandler("ws", commonHub, externalMarshaller)
 	if err != nil {
 		return err
 	}

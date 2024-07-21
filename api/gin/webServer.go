@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	defaultRestInterface = "localhost:5000"
+	defaultRestInterface = ":5000"
 )
 
 var log = logger.GetOrCreate("api/gin")
@@ -162,13 +162,13 @@ func (w *webServer) createGroups() error {
 	}
 	groupsMap["status"] = statusGroup
 
-	if w.configs.Flags.PublisherType == common.WSPublisherType {
-		hubHandler, err := groups.NewHubGroup(w.facade)
-		if err != nil {
-			return err
-		}
-		groupsMap[hubGroupID] = hubHandler
+	// if w.configs.Flags.PublisherType == common.WSPublisherType {
+	hubHandler, err := groups.NewHubGroup(w.facade)
+	if err != nil {
+		return err
 	}
+	groupsMap[hubGroupID] = hubHandler
+	// }
 
 	w.groups = groupsMap
 
