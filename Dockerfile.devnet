@@ -16,4 +16,4 @@ EXPOSE 8080 22111 80 443 5000
 
 WORKDIR /multiversx
 
-CMD ["./notifier", "--general-config", "config/config.devnet.toml", "--publisher-type", "servicebus", "--log-level", "*:NONE"]
+CMD ["./notifier", "--general-config", "config/config.devnet.toml", "--publisher-type", "servicebus"]
