@@ -146,7 +146,6 @@ func getEventType(subEntry data.SubscriptionEntry) string {
 		subEntry.EventType == common.BlockTxs ||
 		subEntry.EventType == common.BlockScrs ||
 		subEntry.EventType == common.AlteredAccountsEvent ||
-		subEntry.EventType == "mvx_altered_accounts" ||
 		subEntry.EventType == common.BlockEvents {
 		return subEntry.EventType
 	}

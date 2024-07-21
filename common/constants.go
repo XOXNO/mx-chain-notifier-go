@@ -38,7 +38,7 @@ const (
 	// BlockScrs defines the subscription event type for block scrs
 	BlockScrs string = "block_scrs"
 
-	AlteredAccountsEvent string = "altered_accounts"
+	AlteredAccountsEvent string = "mvx_altered_accounts"
 )
 
 const (

@@ -27,6 +27,7 @@ type PublisherService interface {
 	BroadcastTxs(event data.BlockTxs)
 	BroadcastScrs(event data.BlockScrs)
 	BroadcastBlockEventsWithOrder(event data.BlockEventsWithOrder)
+	BroadcastAlteredAccounts(accounts data.AlteredAccountsEvent)
 	Close() error
 	IsInterfaceNil() bool
 }

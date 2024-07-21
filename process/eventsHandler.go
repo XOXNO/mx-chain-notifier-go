@@ -111,6 +111,13 @@ func (eh *eventsHandler) HandleSaveBlockEvents(allEvents data.ArgsSaveBlockData)
 	}
 	eh.handleBlockScrs(scrs)
 
+	alteredEvent := data.AlteredAccountsEvent{
+		Hash:      eventsData.Hash,
+		ShardID:   eventsData.Header.GetShardID(),
+		TimeStamp: eventsData.Header.GetTimeStamp(),
+		Accounts:  eventsData.AlteredAccounts,
+	}
+
 	txsWithOrder := data.BlockEventsWithOrder{
 		Hash:      eventsData.Hash,
 		ShardID:   eventsData.Header.GetShardID(),
@@ -120,7 +127,7 @@ func (eh *eventsHandler) HandleSaveBlockEvents(allEvents data.ArgsSaveBlockData)
 		Events:    eventsData.LogEvents,
 	}
 	eh.handleBlockEventsWithOrder(txsWithOrder)
-
+	eh.handleAlteredAccounts(alteredEvent)
 	return nil
 }
 
@@ -312,6 +319,27 @@ func (eh *eventsHandler) handleBlockEventsWithOrder(blockTxs data.BlockEventsWit
 		publisher.BroadcastBlockEventsWithOrder(blockTxs)
 	}
 	eh.metricsHandler.AddRequest(getRabbitOpID(common.BlockEvents), time.Since(t))
+}
+
+// handleBlockEventsWithOrder will handle full block events received from observer
+func (eh *eventsHandler) handleAlteredAccounts(alteredAccountsEvent data.AlteredAccountsEvent) {
+	if len(alteredAccountsEvent.Accounts) == 0 {
+		log.Warn("received empty accounts", "event", common.AlteredAccountsEvent,
+			"will process", false,
+		)
+		return
+	}
+
+	log.Info("received", "event", common.AlteredAccountsEvent,
+		"block hash", alteredAccountsEvent.Hash,
+	)
+
+	t := time.Now()
+
+	for _, publisher := range eh.publishers {
+		publisher.BroadcastAlteredAccounts(alteredAccountsEvent)
+	}
+	eh.metricsHandler.AddRequest(getRabbitOpID(common.AlteredAccountsEvent), time.Since(t))
 }
 
 func (eh *eventsHandler) tryCheckProcessedWithRetry(id, blockHash string) bool {
