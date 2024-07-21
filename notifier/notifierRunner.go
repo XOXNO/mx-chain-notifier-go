@@ -12,7 +12,6 @@ import (
 	"github.com/multiversx/mx-chain-notifier-go/factory"
 	"github.com/multiversx/mx-chain-notifier-go/metrics"
 	"github.com/multiversx/mx-chain-notifier-go/process"
-	"github.com/multiversx/mx-chain-notifier-go/rabbitmq"
 )
 
 var log = logger.GetOrCreate("notifierRunner")
@@ -51,7 +50,11 @@ func (nr *notifierRunner) Start() error {
 		return err
 	}
 
-	publisher, err := factory.CreatePublisher(publisherType, nr.configs.MainConfig, externalMarshaller, commonHub)
+	publisherMain, err := factory.CreatePublisher(publisherType, nr.configs.MainConfig, externalMarshaller, commonHub)
+	if err != nil {
+		return err
+	}
+	publisherHub, err := factory.CreatePublisher("ws", nr.configs.MainConfig, externalMarshaller, commonHub)
 	if err != nil {
 		return err
 	}
@@ -67,11 +70,11 @@ func (nr *notifierRunner) Start() error {
 	if err != nil {
 		return err
 	}
-
+	publishers := []process.Publisher{publisherMain, publisherHub}
 	argsEventsHandler := process.ArgsEventsHandler{
 		CheckDuplicates:      nr.configs.MainConfig.General.CheckDuplicates,
 		Locker:               lockService,
-		Publisher:            publisher,
+		Publishers:           publishers,
 		StatusMetricsHandler: statusMetricsHandler,
 		EventsInterceptor:    eventsInterceptor,
 	}
@@ -101,9 +104,11 @@ func (nr *notifierRunner) Start() error {
 		return err
 	}
 
-	err = publisher.Run()
-	if err != nil {
-		return err
+	for _, publisher := range publishers {
+		err = publisher.Run()
+		if err != nil {
+			return err
+		}
 	}
 
 	err = webServer.Run()
@@ -111,7 +116,7 @@ func (nr *notifierRunner) Start() error {
 		return err
 	}
 
-	err = waitForGracefulShutdown(webServer, publisher, wsConnector)
+	err = waitForGracefulShutdown(webServer, publishers, wsConnector)
 	if err != nil {
 		return err
 	}
@@ -122,7 +127,7 @@ func (nr *notifierRunner) Start() error {
 
 func waitForGracefulShutdown(
 	server shared.WebServerHandler,
-	publisher rabbitmq.PublisherService,
+	publishers []process.Publisher,
 	wsConnector process.WSClient,
 ) error {
 	quit := make(chan os.Signal, 1)
@@ -139,9 +144,11 @@ func waitForGracefulShutdown(
 		return err
 	}
 
-	err = publisher.Close()
-	if err != nil {
-		return err
+	for _, publisher := range publishers {
+		err = publisher.Close()
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

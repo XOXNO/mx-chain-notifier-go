@@ -28,7 +28,7 @@ const (
 // ArgsEventsHandler defines the arguments needed for an events handler
 type ArgsEventsHandler struct {
 	Locker               LockService
-	Publisher            Publisher
+	Publishers           []Publisher
 	StatusMetricsHandler common.StatusMetricsHandler
 	EventsInterceptor    EventsInterceptor
 	CheckDuplicates      bool
@@ -36,7 +36,7 @@ type ArgsEventsHandler struct {
 
 type eventsHandler struct {
 	locker            LockService
-	publisher         Publisher
+	publishers        []Publisher
 	metricsHandler    common.StatusMetricsHandler
 	eventsInterceptor EventsInterceptor
 	checkDuplicates   bool
@@ -51,7 +51,7 @@ func NewEventsHandler(args ArgsEventsHandler) (*eventsHandler, error) {
 
 	return &eventsHandler{
 		locker:            args.Locker,
-		publisher:         args.Publisher,
+		publishers:        args.Publishers,
 		metricsHandler:    args.StatusMetricsHandler,
 		eventsInterceptor: args.EventsInterceptor,
 		checkDuplicates:   args.CheckDuplicates,
@@ -62,7 +62,7 @@ func checkArgs(args ArgsEventsHandler) error {
 	if check.IfNil(args.Locker) {
 		return ErrNilLockService
 	}
-	if check.IfNil(args.Publisher) {
+	if len(args.Publishers) == 0 {
 		return ErrNilPublisherService
 	}
 	if check.IfNil(args.StatusMetricsHandler) {
@@ -145,7 +145,9 @@ func (eh *eventsHandler) handlePushEvents(events data.BlockEvents) error {
 	}
 
 	t := time.Now()
-	eh.publisher.Broadcast(events)
+	for _, publisher := range eh.publishers {
+		publisher.Broadcast(events)
+	}
 	eh.metricsHandler.AddRequest(getRabbitOpID(common.PushLogsAndEvents), time.Since(t))
 	return nil
 }
@@ -196,7 +198,10 @@ func (eh *eventsHandler) HandleRevertEvents(revertBlock data.RevertBlock) {
 	)
 
 	t := time.Now()
-	eh.publisher.BroadcastRevert(revertBlock)
+
+	for _, publisher := range eh.publishers {
+		publisher.BroadcastRevert(revertBlock)
+	}
 	eh.metricsHandler.AddRequest(getRabbitOpID(common.RevertBlockEvents), time.Since(t))
 }
 
@@ -227,7 +232,10 @@ func (eh *eventsHandler) HandleFinalizedEvents(finalizedBlock data.FinalizedBloc
 	)
 
 	t := time.Now()
-	eh.publisher.BroadcastFinalized(finalizedBlock)
+
+	for _, publisher := range eh.publishers {
+		publisher.BroadcastFinalized(finalizedBlock)
+	}
 	eh.metricsHandler.AddRequest(getRabbitOpID(common.FinalizedBlockEvents), time.Since(t))
 }
 
@@ -251,7 +259,10 @@ func (eh *eventsHandler) handleBlockTxs(blockTxs data.BlockTxs) {
 	}
 
 	t := time.Now()
-	eh.publisher.BroadcastTxs(blockTxs)
+
+	for _, publisher := range eh.publishers {
+		publisher.BroadcastTxs(blockTxs)
+	}
 	eh.metricsHandler.AddRequest(getRabbitOpID(common.BlockTxs), time.Since(t))
 }
 
@@ -275,7 +286,10 @@ func (eh *eventsHandler) handleBlockScrs(blockScrs data.BlockScrs) {
 	}
 
 	t := time.Now()
-	eh.publisher.BroadcastScrs(blockScrs)
+
+	for _, publisher := range eh.publishers {
+		publisher.BroadcastScrs(blockScrs)
+	}
 	eh.metricsHandler.AddRequest(getRabbitOpID(common.BlockScrs), time.Since(t))
 }
 
@@ -293,7 +307,10 @@ func (eh *eventsHandler) handleBlockEventsWithOrder(blockTxs data.BlockEventsWit
 	)
 
 	t := time.Now()
-	eh.publisher.BroadcastBlockEventsWithOrder(blockTxs)
+
+	for _, publisher := range eh.publishers {
+		publisher.BroadcastBlockEventsWithOrder(blockTxs)
+	}
 	eh.metricsHandler.AddRequest(getRabbitOpID(common.BlockEvents), time.Since(t))
 }
 
