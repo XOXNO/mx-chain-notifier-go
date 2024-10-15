@@ -36,9 +36,9 @@ func NewServiceBusPublisher(args ArgsServiceBusPublisher) (*serviceBusPublisher,
 	}
 
 	sb := &serviceBusPublisher{
-		cfg:                           args.Config,
-		client:                        args.Client,
-		marshaller:                    args.Marshaller,
+		cfg:        args.Config,
+		client:     args.Client,
+		marshaller: args.Marshaller,
 	}
 
 	return sb, nil
@@ -98,6 +98,15 @@ func (sb *serviceBusPublisher) Publish(events data.BlockEvents) {
 			identifier == core.BuiltInFunctionESDTNFTAddQuantity ||
 			identifier == core.BuiltInFunctionMultiESDTNFTTransfer ||
 			identifier == core.BuiltInFunctionESDTNFTTransfer ||
+			identifier == core.BuiltInFunctionESDTSetLimitedTransfer ||
+			identifier == "registerAndSetAllRoles" ||
+			identifier == "registerMetaESDT" ||
+			identifier == "ESDTUnSetRole" ||
+			identifier == "ESDTSetRole" ||
+			identifier == "issueNonFungible" ||
+			identifier == "issueSemiFungible" ||
+			identifier == "ESDTTransferRoleAddAddress" ||
+			identifier == "ESDTTransferRoleDeleteAddress" ||
 			identifier == core.BuiltInFunctionESDTTransfer {
 			hexStr := hex.EncodeToString(event.Topics[1])
 			if hexStr == "" {
