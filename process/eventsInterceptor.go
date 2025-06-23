@@ -177,7 +177,7 @@ func (ei *eventsInterceptor) getLogEventsFromTransactionsPool(logs []*outport.Lo
 	}
 
 	if len(logEvents) == 0 {
-		return nil
+		return make([]data.Event, 0)
 	}
 
 	events := make([]data.Event, 0, len(logEvents))
@@ -192,7 +192,14 @@ func (ei *eventsInterceptor) getLogEventsFromTransactionsPool(logs []*outport.Lo
 		}
 		eventIdentifier := string(event.EventHandler.GetIdentifier())
 		topics := event.EventHandler.GetTopics()
+		if topics == nil {
+			topics = make([][]byte, 0)
+		}
 
+		eventData := event.EventHandler.GetData()
+		if eventData == nil {
+			eventData = make([]byte, 0)
+		}
 		// Split the multi ESDTNFTTransfer in batches so their are emmited one by one (works best for processing them separate in case of failures on one of them)
 		if eventIdentifier == core.BuiltInFunctionMultiESDTNFTTransfer && len(topics) > 4 {
 			topicsLen := len(topics)
