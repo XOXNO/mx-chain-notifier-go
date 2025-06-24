@@ -2,10 +2,14 @@ FROM golang:1.23.6 AS builder
 
 WORKDIR /multiversx
 
+COPY go.mod go.sum ./
+RUN go mod download
+
 COPY . .
 
 WORKDIR /multiversx/cmd/notifier
 
+RUN go mod tidy
 RUN go build -o notifier
 
 # ===== SECOND STAGE ======
