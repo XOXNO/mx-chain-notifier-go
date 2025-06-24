@@ -1,6 +1,7 @@
-FROM golang:alpine as builder
+FROM golang:alpine AS builder
 
 WORKDIR /multiversx
+
 COPY . .
 
 WORKDIR /multiversx/cmd/notifier
