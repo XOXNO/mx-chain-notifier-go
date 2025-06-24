@@ -137,11 +137,11 @@ func (ei *eventsInterceptor) getLogEventsFromTransactionsPool(logs []*outport.Lo
 					return nil
 				}
 				hexData := hex.EncodeToString(jsonData)
-				_, isThere := duplicateTwiceSameBlock[originalTxHash + hexData]
+				_, isThere := duplicateTwiceSameBlock[originalTxHash+hexData]
 				if !isThere {
 					skipEvent, err := ei.locker.IsCrossShardConfirmation(context.Background(), originalTxHash, event)
-					// Save this as already seen in this logs block 
-					duplicateTwiceSameBlock[originalTxHash + hexData] = true
+					// Save this as already seen in this logs block
+					duplicateTwiceSameBlock[originalTxHash+hexData] = true
 					if err != nil {
 						log.Info("eventsInterceptor: failed to check cross shard confirmation", "error", err)
 						continue
@@ -162,7 +162,8 @@ func (ei *eventsInterceptor) getLogEventsFromTransactionsPool(logs []*outport.Lo
 			tmpLogEvents = append(tmpLogEvents, le)
 		}
 		if skipTransfers {
-			var filteredItems []*logEvent
+			// Pre-allocate with capacity for better performance
+			filteredItems := make([]*logEvent, 0, len(tmpLogEvents))
 			for _, item := range tmpLogEvents {
 				identifier := string(item.EventHandler.GetIdentifier())
 				if identifier == core.BuiltInFunctionMultiESDTNFTTransfer || identifier == core.BuiltInFunctionESDTNFTTransfer || identifier == core.BuiltInFunctionESDTTransfer {
@@ -207,15 +208,16 @@ func (ei *eventsInterceptor) getLogEventsFromTransactionsPool(logs []*outport.Lo
 			receiver := topics[topicsLen-1]
 
 			for i := 0; i < iterations; i++ {
-				newTopics := make([][]byte, 0, 4)
+				// Pre-allocate with exact size instead of using append
+				newTopics := make([][]byte, 4)
 				// identifier
-				newTopics = append(newTopics, topics[i*3])
+				newTopics[0] = topics[i*3]
 				// nonce
-				newTopics = append(newTopics, topics[1+i*3])
+				newTopics[1] = topics[1+i*3]
 				// amount
-				newTopics = append(newTopics, topics[2+i*3])
+				newTopics[2] = topics[2+i*3]
 				// receiver
-				newTopics = append(newTopics, receiver)
+				newTopics[3] = receiver
 
 				events = append(events, data.Event{
 					Address:        bech32Address,

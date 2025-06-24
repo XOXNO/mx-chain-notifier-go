@@ -18,6 +18,15 @@ import (
 
 var log = logger.GetOrCreate("websocket")
 
+// Object pools for frequently allocated structures to reduce GC pressure
+var (
+	wsMessagePool = sync.Pool{
+		New: func() interface{} {
+			return make([]byte, 0, 4096) // Pre-allocate 4KB capacity
+		},
+	}
+)
+
 const (
 	writeWait  = 10 * time.Second
 	pongWait   = 60 * time.Second
@@ -60,7 +69,7 @@ func newWebSocketDispatcher(args argsWebSocketDispatcher) (*websocketDispatcher,
 
 	return &websocketDispatcher{
 		id:         uuid.New(),
-		send:       make(chan []byte, 256),
+		send:       make(chan []byte, 10000), // Increased from 256 to 10000 for better throughput
 		conn:       args.Conn,
 		dispatcher: args.Dispatcher,
 		marshaller: args.Marshaller,
@@ -74,17 +83,16 @@ func (wd *websocketDispatcher) GetID() uuid.UUID {
 
 // PushEvents receives an events slice and processes it before pushing to socket
 func (wd *websocketDispatcher) PushEvents(events []data.Event) {
-	eventBytes, err := wd.marshaller.Marshal(events)
-	if err != nil {
-		log.Error("failure marshalling events", "err", err.Error())
-		return
+	// Direct marshaling optimization - eliminates double marshaling
+	directWSMessage := struct {
+		Type string       `json:"type"`
+		Data []data.Event `json:"data"`
+	}{
+		Type: common.PushLogsAndEvents,
+		Data: events,
 	}
 
-	wsEvent := &data.WebSocketEvent{
-		Type: common.PushLogsAndEvents,
-		Data: eventBytes,
-	}
-	wsEventBytes, err := wd.marshaller.Marshal(wsEvent)
+	wsEventBytes, err := wd.marshaller.Marshal(directWSMessage)
 	if err != nil {
 		log.Error("failure marshalling events", "err", err.Error())
 		return
@@ -95,18 +103,18 @@ func (wd *websocketDispatcher) PushEvents(events []data.Event) {
 
 // RevertEvent receives a reverted block event and process it before pushing to socket
 func (wd *websocketDispatcher) RevertEvent(event data.RevertBlock) {
-	eventBytes, err := wd.marshaller.Marshal(event)
-	if err != nil {
-		log.Error("failure marshalling events", "err", err.Error())
-		return
-	}
-	wsEvent := &data.WebSocketEvent{
+	// Direct marshaling optimization - eliminates double marshaling
+	directWSMessage := struct {
+		Type string           `json:"type"`
+		Data data.RevertBlock `json:"data"`
+	}{
 		Type: common.RevertBlockEvents,
-		Data: eventBytes,
+		Data: event,
 	}
-	wsEventBytes, err := wd.marshaller.Marshal(wsEvent)
+
+	wsEventBytes, err := wd.marshaller.Marshal(directWSMessage)
 	if err != nil {
-		log.Error("failure marshalling events", "err", err.Error())
+		log.Error("failure marshalling revert event", "err", err.Error())
 		return
 	}
 
@@ -115,18 +123,18 @@ func (wd *websocketDispatcher) RevertEvent(event data.RevertBlock) {
 
 // FinalizedEvent receives a finalized block event and process it before pushing to socket
 func (wd *websocketDispatcher) FinalizedEvent(event data.FinalizedBlock) {
-	eventBytes, err := wd.marshaller.Marshal(event)
-	if err != nil {
-		log.Error("failure marshalling events", "err", err.Error())
-		return
-	}
-	wsEvent := &data.WebSocketEvent{
+	// Direct marshaling optimization - eliminates double marshaling
+	directWSMessage := struct {
+		Type string              `json:"type"`
+		Data data.FinalizedBlock `json:"data"`
+	}{
 		Type: common.FinalizedBlockEvents,
-		Data: eventBytes,
+		Data: event,
 	}
-	wsEventBytes, err := wd.marshaller.Marshal(wsEvent)
+
+	wsEventBytes, err := wd.marshaller.Marshal(directWSMessage)
 	if err != nil {
-		log.Error("failure marshalling events", "err", err.Error())
+		log.Error("failure marshalling finalized event", "err", err.Error())
 		return
 	}
 
@@ -135,18 +143,18 @@ func (wd *websocketDispatcher) FinalizedEvent(event data.FinalizedBlock) {
 
 // TxsEvent receives a block txs event and process it before pushing to socket
 func (wd *websocketDispatcher) TxsEvent(event data.BlockTxs) {
-	eventBytes, err := wd.marshaller.Marshal(event)
-	if err != nil {
-		log.Error("failure marshalling events", "err", err.Error())
-		return
-	}
-	wsEvent := &data.WebSocketEvent{
+	// Direct marshaling optimization - eliminates double marshaling
+	directWSMessage := struct {
+		Type string        `json:"type"`
+		Data data.BlockTxs `json:"data"`
+	}{
 		Type: common.BlockTxs,
-		Data: eventBytes,
+		Data: event,
 	}
-	wsEventBytes, err := wd.marshaller.Marshal(wsEvent)
+
+	wsEventBytes, err := wd.marshaller.Marshal(directWSMessage)
 	if err != nil {
-		log.Error("failure marshalling events", "err", err.Error())
+		log.Error("failure marshalling txs event", "err", err.Error())
 		return
 	}
 
@@ -155,18 +163,18 @@ func (wd *websocketDispatcher) TxsEvent(event data.BlockTxs) {
 
 // BlockEvents receives block events with data and processes it before pushing to socket
 func (wd *websocketDispatcher) BlockEvents(event data.BlockEventsWithOrder) {
-	eventBytes, err := wd.marshaller.Marshal(event)
-	if err != nil {
-		log.Error("failure marshalling events", "err", err.Error())
-		return
-	}
-	wsEvent := &data.WebSocketEvent{
+	// Direct marshaling optimization - eliminates double marshaling
+	directWSMessage := struct {
+		Type string                    `json:"type"`
+		Data data.BlockEventsWithOrder `json:"data"`
+	}{
 		Type: common.BlockEvents,
-		Data: eventBytes,
+		Data: event,
 	}
-	wsEventBytes, err := wd.marshaller.Marshal(wsEvent)
+
+	wsEventBytes, err := wd.marshaller.Marshal(directWSMessage)
 	if err != nil {
-		log.Error("failure marshalling events", "err", err.Error())
+		log.Error("failure marshalling block events", "err", err.Error())
 		return
 	}
 
@@ -175,18 +183,18 @@ func (wd *websocketDispatcher) BlockEvents(event data.BlockEventsWithOrder) {
 
 // ScrsEvent receives a block scrs event and process it before pushing to socket
 func (wd *websocketDispatcher) ScrsEvent(event data.BlockScrs) {
-	eventBytes, err := wd.marshaller.Marshal(event)
-	if err != nil {
-		log.Error("failure marshalling events", "err", err.Error())
-		return
-	}
-	wsEvent := &data.WebSocketEvent{
+	// Direct marshaling optimization - eliminates double marshaling
+	directWSMessage := struct {
+		Type string         `json:"type"`
+		Data data.BlockScrs `json:"data"`
+	}{
 		Type: common.BlockScrs,
-		Data: eventBytes,
+		Data: event,
 	}
-	wsEventBytes, err := wd.marshaller.Marshal(wsEvent)
+
+	wsEventBytes, err := wd.marshaller.Marshal(directWSMessage)
 	if err != nil {
-		log.Error("failure marshalling events", "err", err.Error())
+		log.Error("failure marshalling scrs event", "err", err.Error())
 		return
 	}
 
@@ -195,24 +203,23 @@ func (wd *websocketDispatcher) ScrsEvent(event data.BlockScrs) {
 
 // AlteredAccounts receives a block scrs event and process it before pushing to socket
 func (wd *websocketDispatcher) AlteredAccounts(event data.AlteredAccountsEvent) {
-	eventBytes, err := wd.marshaller.Marshal(event)
-	if err != nil {
-		log.Error("failure marshalling events", "err", err.Error())
-		return
-	}
-	wsEvent := &data.WebSocketEvent{
+	// Direct marshaling optimization - eliminates double marshaling
+	directWSMessage := struct {
+		Type string                    `json:"type"`
+		Data data.AlteredAccountsEvent `json:"data"`
+	}{
 		Type: common.AlteredAccountsEvent,
-		Data: eventBytes,
+		Data: event,
 	}
-	wsEventBytes, err := wd.marshaller.Marshal(wsEvent)
+
+	wsEventBytes, err := wd.marshaller.Marshal(directWSMessage)
 	if err != nil {
-		log.Error("failure marshalling events", "err", err.Error())
+		log.Error("failure marshalling altered accounts event", "err", err.Error())
 		return
 	}
 
 	wd.send <- wsEventBytes
 }
-
 
 // writePump listens on the send-channel and pushes data on the socket stream
 func (wd *websocketDispatcher) writePump() {

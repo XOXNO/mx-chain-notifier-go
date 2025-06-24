@@ -78,7 +78,8 @@ func (ch *commonHub) Publish(blockEvents data.BlockEvents) {
 }
 
 func (ch *commonHub) handlePushBlockEvents(blockEvents data.BlockEvents, subscription data.Subscription) {
-	events := make([]data.Event, 0)
+	// Pre-allocate slice with capacity based on input size for better performance
+	events := make([]data.Event, 0, len(blockEvents.Events))
 	for _, event := range blockEvents.Events {
 		if ch.filter.MatchEvent(subscription, event) {
 			events = append(events, event)

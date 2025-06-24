@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	readBufferSize  = 1024
-	writeBufferSize = 1024
+	readBufferSize  = 64 * 1024 // Increased from 1KB to 64KB for better throughput
+	writeBufferSize = 64 * 1024 // Increased from 1KB to 64KB for better throughput
 )
 
 // CreateWSHandler creates websocket handler component based on api type

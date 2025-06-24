@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/multiversx/mx-chain-core-go/core/check"
@@ -17,6 +18,8 @@ var log = logger.GetOrCreate("process")
 const (
 	setRetryDuration       = time.Millisecond * 500
 	reconnectRetryDuration = time.Second * 2
+	redisOperationTimeout  = time.Second * 5 // Timeout for Redis operations
+	maxRedisRetries        = 10              // Maximum retry attempts
 	minRetries             = 1
 	revertKeyPrefix        = "revert_"
 	finalizedKeyPrefix     = "finalized_"
@@ -152,9 +155,9 @@ func (eh *eventsHandler) handlePushEvents(events data.BlockEvents) error {
 	}
 
 	t := time.Now()
-	for _, publisher := range eh.publishers {
+	eh.broadcastConcurrent(func(publisher Publisher) {
 		publisher.Broadcast(events)
-	}
+	})
 	eh.metricsHandler.AddRequest(getRabbitOpID(common.PushLogsAndEvents), time.Since(t))
 	return nil
 }
@@ -206,9 +209,9 @@ func (eh *eventsHandler) HandleRevertEvents(revertBlock data.RevertBlock) {
 
 	t := time.Now()
 
-	for _, publisher := range eh.publishers {
+	eh.broadcastConcurrent(func(publisher Publisher) {
 		publisher.BroadcastRevert(revertBlock)
-	}
+	})
 	eh.metricsHandler.AddRequest(getRabbitOpID(common.RevertBlockEvents), time.Since(t))
 }
 
@@ -240,9 +243,9 @@ func (eh *eventsHandler) HandleFinalizedEvents(finalizedBlock data.FinalizedBloc
 
 	t := time.Now()
 
-	for _, publisher := range eh.publishers {
+	eh.broadcastConcurrent(func(publisher Publisher) {
 		publisher.BroadcastFinalized(finalizedBlock)
-	}
+	})
 	eh.metricsHandler.AddRequest(getRabbitOpID(common.FinalizedBlockEvents), time.Since(t))
 }
 
@@ -267,9 +270,9 @@ func (eh *eventsHandler) handleBlockTxs(blockTxs data.BlockTxs) {
 
 	t := time.Now()
 
-	for _, publisher := range eh.publishers {
+	eh.broadcastConcurrent(func(publisher Publisher) {
 		publisher.BroadcastTxs(blockTxs)
-	}
+	})
 	eh.metricsHandler.AddRequest(getRabbitOpID(common.BlockTxs), time.Since(t))
 }
 
@@ -294,9 +297,9 @@ func (eh *eventsHandler) handleBlockScrs(blockScrs data.BlockScrs) {
 
 	t := time.Now()
 
-	for _, publisher := range eh.publishers {
+	eh.broadcastConcurrent(func(publisher Publisher) {
 		publisher.BroadcastScrs(blockScrs)
-	}
+	})
 	eh.metricsHandler.AddRequest(getRabbitOpID(common.BlockScrs), time.Since(t))
 }
 
@@ -315,9 +318,9 @@ func (eh *eventsHandler) handleBlockEventsWithOrder(blockTxs data.BlockEventsWit
 
 	t := time.Now()
 
-	for _, publisher := range eh.publishers {
+	eh.broadcastConcurrent(func(publisher Publisher) {
 		publisher.BroadcastBlockEventsWithOrder(blockTxs)
-	}
+	})
 	eh.metricsHandler.AddRequest(getRabbitOpID(common.BlockEvents), time.Since(t))
 }
 
@@ -336,9 +339,9 @@ func (eh *eventsHandler) handleAlteredAccounts(alteredAccountsEvent data.Altered
 
 	t := time.Now()
 
-	for _, publisher := range eh.publishers {
+	eh.broadcastConcurrent(func(publisher Publisher) {
 		publisher.BroadcastAlteredAccounts(alteredAccountsEvent)
-	}
+	})
 	eh.metricsHandler.AddRequest(getRabbitOpID(common.AlteredAccountsEvent), time.Since(t))
 }
 
@@ -349,28 +352,52 @@ func (eh *eventsHandler) tryCheckProcessedWithRetry(id, blockHash string) bool {
 	prefix := getPrefixLockerKey(id)
 	key := prefix + blockHash
 
-	for {
+	// Implement timeout and retry limit to prevent infinite blocking
+	for attempt := 0; attempt < maxRedisRetries; attempt++ {
+		// Create context with timeout for each Redis operation
+		ctx, cancel := context.WithTimeout(context.Background(), redisOperationTimeout)
+
 		t := time.Now()
-		setSuccessful, err = eh.locker.IsEventProcessed(context.Background(), key)
+		setSuccessful, err = eh.locker.IsEventProcessed(ctx, key)
 		eh.metricsHandler.AddRequest(getRedisOpID(id), time.Since(t))
+		cancel() // Always cancel context to prevent resource leaks
 
 		if err == nil {
+			log.Debug("locker", "event", id, "block hash", blockHash, "succeeded", setSuccessful, "attempt", attempt+1)
+			return setSuccessful
+		}
+
+		log.Error("failed to check event in locker", "error", err.Error(), "attempt", attempt+1, "maxRetries", maxRedisRetries)
+
+		// Stop retrying if we've reached the maximum attempts
+		if attempt >= maxRedisRetries-1 {
 			break
 		}
 
-		log.Error("failed to check event in locker", "error", err.Error())
 		if !eh.locker.HasConnection(context.Background()) {
-			log.Error("failure connecting to locker service")
-
+			log.Error("failure connecting to locker service", "attempt", attempt+1)
 			time.Sleep(reconnectRetryDuration)
 		} else {
 			time.Sleep(setRetryDuration)
 		}
 	}
 
-	log.Debug("locker", "event", id, "block hash", blockHash, "succeeded", setSuccessful)
+	// If all retries failed, log error and return false (assume not processed to be safe)
+	log.Error("exhausted all Redis retry attempts", "event", id, "blockHash", blockHash, "maxRetries", maxRedisRetries)
+	return false
+}
 
-	return setSuccessful
+// broadcastConcurrent executes the given broadcast function concurrently across all publishers
+func (eh *eventsHandler) broadcastConcurrent(broadcastFunc func(Publisher)) {
+	var wg sync.WaitGroup
+	for _, publisher := range eh.publishers {
+		wg.Add(1)
+		go func(pub Publisher) {
+			defer wg.Done()
+			broadcastFunc(pub)
+		}(publisher)
+	}
+	wg.Wait()
 }
 
 func getPrefixLockerKey(id string) string {

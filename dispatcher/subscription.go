@@ -37,13 +37,21 @@ const (
 type SubscriptionMapper struct {
 	rwMut         sync.RWMutex
 	subscriptions map[uuid.UUID][]data.Subscription
+
+	// Cache for subscription map to avoid recreation on every call
+	cacheMutex          sync.RWMutex
+	cachedSubscriptions map[string][]data.Subscription
+	cacheValid          bool
 }
 
 // NewSubscriptionMapper initializes an empty map for subscriptions
 func NewSubscriptionMapper() *SubscriptionMapper {
 	return &SubscriptionMapper{
-		rwMut:         sync.RWMutex{},
-		subscriptions: make(map[uuid.UUID][]data.Subscription),
+		rwMut:               sync.RWMutex{},
+		subscriptions:       make(map[uuid.UUID][]data.Subscription),
+		cacheMutex:          sync.RWMutex{},
+		cachedSubscriptions: make(map[string][]data.Subscription),
+		cacheValid:          false,
 	}
 }
 
@@ -92,6 +100,7 @@ func (sm *SubscriptionMapper) RemoveSubscriptions(dispatcherID uuid.UUID) {
 
 	if _, ok := sm.subscriptions[dispatcherID]; ok {
 		delete(sm.subscriptions, dispatcherID)
+		sm.invalidateCache() // Invalidate cache when subscriptions change
 	}
 
 	log.Info("unsubscribed dispatcher", "dispatcherID", dispatcherID)
@@ -99,17 +108,46 @@ func (sm *SubscriptionMapper) RemoveSubscriptions(dispatcherID uuid.UUID) {
 
 // Subscriptions returns a slice reflecting the subscriptions present in the map
 func (sm *SubscriptionMapper) Subscriptions() map[string][]data.Subscription {
+	// Check if cache is valid first
+	sm.cacheMutex.RLock()
+	if sm.cacheValid {
+		result := sm.cachedSubscriptions
+		sm.cacheMutex.RUnlock()
+		return result
+	}
+	sm.cacheMutex.RUnlock()
+
+	// Cache invalid, need to rebuild
+	sm.cacheMutex.Lock()
+	defer sm.cacheMutex.Unlock()
+
+	// Double-check pattern in case another goroutine rebuilt it
+	if sm.cacheValid {
+		return sm.cachedSubscriptions
+	}
+
+	// Rebuild cache
 	sm.rwMut.RLock()
 	defer sm.rwMut.RUnlock()
 
-	subscriptions := make(map[string][]data.Subscription)
+	// Estimate capacity based on current subscription count
+	estimatedTypes := 10 // Common event types count estimate
+	sm.cachedSubscriptions = make(map[string][]data.Subscription, estimatedTypes)
 	for _, sub := range sm.subscriptions {
 		for _, s := range sub {
-			subscriptions[s.EventType] = append(subscriptions[s.EventType], s)
+			sm.cachedSubscriptions[s.EventType] = append(sm.cachedSubscriptions[s.EventType], s)
 		}
 	}
+	sm.cacheValid = true
 
-	return subscriptions
+	return sm.cachedSubscriptions
+}
+
+// invalidateCache marks the cache as invalid
+func (sm *SubscriptionMapper) invalidateCache() {
+	sm.cacheMutex.Lock()
+	sm.cacheValid = false
+	sm.cacheMutex.Unlock()
 }
 
 func (sm *SubscriptionMapper) matchLevelFromInput(subEntry data.SubscriptionEntry) string {
@@ -138,6 +176,7 @@ func (sm *SubscriptionMapper) appendSubscription(sub data.Subscription) {
 	defer sm.rwMut.Unlock()
 
 	sm.subscriptions[sub.DispatcherID] = append(sm.subscriptions[sub.DispatcherID], sub)
+	sm.invalidateCache() // Invalidate cache when subscriptions change
 }
 
 func getEventType(subEntry data.SubscriptionEntry) string {
