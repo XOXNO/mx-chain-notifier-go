@@ -3,29 +3,43 @@ package servicebus
 import (
 	"context"
 	"errors"
+	"math"
 	"sync"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus"
+	logger "github.com/multiversx/mx-chain-logger-go"
 	"github.com/multiversx/mx-chain-notifier-go/config"
 )
 
+var clientLog = logger.GetOrCreate("servicebus-client")
+
 const (
-	reconnectRetryMs = 500
+	// Retry configuration constants
+	reconnectRetryMs   = 500
+	maxRetryAttempts   = 10
+	initialBackoffMs   = 100
+	maxBackoffMs       = 30000
+	backoffMultiplier  = 2.0
+	deliveryTimeoutSec = 30
+
+	// Operational constants
+	minBatchSize = 1
+	maxBatchSize = 256 // Azure Service Bus limit
 )
 
 type serviceBusClient struct {
-	url    string
-	pubMut sync.Mutex
+	url          string
+	publishMutex sync.Mutex
 
 	client *azservicebus.Client
 }
 
-// NewserviceBusClient creates a new rabbitMQ client instance
+// NewServiceBusClient creates a new Azure Service Bus client instance
 func NewServiceBusClient(url string) (*serviceBusClient, error) {
 	sb := &serviceBusClient{
-		url:    url,
-		pubMut: sync.Mutex{},
+		url:          url,
+		publishMutex: sync.Mutex{},
 	}
 
 	err := sb.connect()
@@ -36,23 +50,35 @@ func NewServiceBusClient(url string) (*serviceBusClient, error) {
 	return sb, nil
 }
 
-// Publish will publish an item on the servicebus channel
+// Publish publishes a batch of messages to the specified Service Bus topic
 func (sb *serviceBusClient) Publish(exchangeConfig config.ServiceBusExchangeConfig, cfg config.AzureServiceBusConfig, messages []*azservicebus.Message) error {
 	if !exchangeConfig.Enabled {
+		clientLog.Debug("exchange disabled, skipping publish", "topic", exchangeConfig.Topic)
 		return nil
 	}
-	sb.pubMut.Lock()
-	defer sb.pubMut.Unlock()
 
-	sender, err := sb.client.NewSender(exchangeConfig.Topic, nil)
+	if len(messages) == 0 {
+		clientLog.Debug("no messages to publish", "topic", exchangeConfig.Topic)
+		return nil
+	}
+
+	if len(messages) > maxBatchSize {
+		clientLog.Warn("batch size exceeds maximum limit, truncating", "requestedSize", len(messages), "maxSize", maxBatchSize, "topic", exchangeConfig.Topic)
+		messages = messages[:maxBatchSize]
+	}
+
+	sb.publishMutex.Lock()
+	defer sb.publishMutex.Unlock()
+
+	sender, err := sb.createSender(exchangeConfig.Topic)
 	if err != nil {
-		log.Error("could not send the payload to azure service bus", "err", err.Error())
 		return err
 	}
+	defer sb.closeSender(sender, exchangeConfig.Topic)
 
 	currentMessageBatch, err := sender.NewMessageBatch(context.Background(), nil)
 	if err != nil {
-		log.Error("error creating message batch for service bus:", err)
+		clientLog.Error("failed to create message batch", "topic", exchangeConfig.Topic, "err", err.Error())
 		return err
 	}
 
@@ -62,25 +88,23 @@ func (sb *serviceBusClient) Publish(exchangeConfig config.ServiceBusExchangeConf
 
 		if errors.Is(err, azservicebus.ErrMessageTooLarge) {
 			if currentMessageBatch.NumMessages() == 0 {
-				log.Error("Single message is too large to be sent in a batch.")
+				clientLog.Error("message too large for batch", "topic", exchangeConfig.Topic)
 				return err
 			}
 
-			log.Info("Message batch is full. Sending it and creating a new one.", "count", currentMessageBatch.NumMessages())
+			clientLog.Debug("batch full, sending and creating new batch", "messageCount", currentMessageBatch.NumMessages(), "topic", exchangeConfig.Topic)
 
-			// send what we have since the batch is full
-			err := sender.SendMessageBatch(context.Background(), currentMessageBatch, nil)
-
-			if err != nil {
-				log.Error("Error sending the batch of messages", err)
-				return err
+			// send what we have since the batch is full with retry logic
+			if sendErr := sb.sendWithRetry(sender, currentMessageBatch); sendErr != nil {
+				clientLog.Error("Error sending the batch of messages after retries", "err", sendErr)
+				return sendErr
 			}
 
 			// Create a new batch and retry adding this message to our batch.
 			newBatch, err := sender.NewMessageBatch(context.Background(), nil)
 
 			if err != nil {
-				log.Error("Error creating a new batch of messages", err)
+				clientLog.Error("Error creating a new batch of messages", err)
 				return err
 			}
 
@@ -90,21 +114,19 @@ func (sb *serviceBusClient) Publish(exchangeConfig config.ServiceBusExchangeConf
 			// was full so it didn't go out with the previous SendMessageBatch call).
 			i--
 		} else if err != nil {
-			log.Error("Error adding message to batch", currentMessageBatch.NumMessages(), err.Error())
+			clientLog.Error("Error adding message to batch", "count", currentMessageBatch.NumMessages(), "err", err.Error())
 			return err
 		}
 	}
 
 	// check if any messages are remaining to be sent.
 	if currentMessageBatch.NumMessages() > 0 {
-		err := sender.SendMessageBatch(context.Background(), currentMessageBatch, nil)
-		if err != nil {
-			log.Error("Error send remaining messages in batch", err.Error())
-			return err
+		if sendErr := sb.sendWithRetry(sender, currentMessageBatch); sendErr != nil {
+			clientLog.Error("Error send remaining messages in batch after retries", "err", sendErr)
+			return sendErr
 		}
 	}
 
-	sender.Close(context.Background())
 	return nil
 }
 
@@ -117,26 +139,83 @@ func (sb *serviceBusClient) connect() error {
 	return nil
 }
 
-// Reconnect will try to reconnect to rabbitmq
+// createSender creates a new sender for the specified topic
+func (sb *serviceBusClient) createSender(topic string) (*azservicebus.Sender, error) {
+	sender, err := sb.client.NewSender(topic, nil)
+	if err != nil {
+		clientLog.Error("failed to create service bus sender", "topic", topic, "err", err.Error())
+		return nil, err
+	}
+	return sender, nil
+}
+
+// closeSender safely closes the sender with error logging
+func (sb *serviceBusClient) closeSender(sender *azservicebus.Sender, topic string) {
+	if err := sender.Close(context.Background()); err != nil {
+		clientLog.Warn("failed to close sender", "topic", topic, "err", err.Error())
+	}
+}
+
+// sendWithRetry sends a message batch with exponential backoff retry logic
+func (sb *serviceBusClient) sendWithRetry(sender *azservicebus.Sender, batch *azservicebus.MessageBatch) error {
+	var lastErr error
+	backoffMs := initialBackoffMs
+
+	for attempt := 1; attempt <= maxRetryAttempts; attempt++ {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*deliveryTimeoutSec)
+		err := sender.SendMessageBatch(ctx, batch, nil)
+		cancel()
+
+		if err == nil {
+			if attempt > 1 {
+				clientLog.Debug("message batch sent successfully after retry", "attempt", attempt)
+			}
+			return nil
+		}
+
+		lastErr = err
+		clientLog.Warn("failed to send message batch", "attempt", attempt, "maxAttempts", maxRetryAttempts, "err", err.Error())
+
+		if attempt < maxRetryAttempts {
+			sleepDuration := time.Duration(backoffMs) * time.Millisecond
+			clientLog.Debug("retrying after backoff", "sleepMs", backoffMs, "nextAttempt", attempt+1)
+			time.Sleep(sleepDuration)
+
+			// Exponential backoff with jitter
+			backoffMs = int(math.Min(float64(backoffMs)*backoffMultiplier, float64(maxBackoffMs)))
+		}
+	}
+
+	clientLog.Error("exhausted all retry attempts for message batch", "attempts", maxRetryAttempts, "lastErr", lastErr.Error())
+	return lastErr
+}
+
+// Reconnect will try to reconnect to Service Bus with exponential backoff
 func (sb *serviceBusClient) Reconnect() {
+	backoffMs := initialBackoffMs
+	attempt := 1
+
 	for {
-		time.Sleep(time.Millisecond * reconnectRetryMs)
+		time.Sleep(time.Duration(backoffMs) * time.Millisecond)
 
 		err := sb.connect()
 		if err != nil {
-			log.Debug("could not reconnect", "err", err.Error())
+			clientLog.Debug("could not reconnect", "attempt", attempt, "err", err.Error())
+			// Exponential backoff for reconnection
+			backoffMs = int(math.Min(float64(backoffMs)*backoffMultiplier, float64(maxBackoffMs)))
+			attempt++
 		} else {
-			log.Debug("connection established after reconnect attempts")
+			clientLog.Debug("connection established after reconnect attempts", "attempts", attempt)
 			break
 		}
 	}
 }
 
-// Close will close rabbitMq client connection
+// Close closes the Azure Service Bus client connection
 func (sb *serviceBusClient) Close() {
 	err := sb.client.Close(context.Background())
 	if err != nil {
-		log.Error("failed to close servicebus client", "err", err.Error())
+		clientLog.Error("failed to close servicebus client", "err", err.Error())
 	}
 }
 
