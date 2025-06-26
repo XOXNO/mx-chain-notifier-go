@@ -1,11 +1,16 @@
 package mocks
 
-import "context"
+import (
+	"context"
+
+	"github.com/multiversx/mx-chain-notifier-go/data"
+)
 
 // LockerStub implements LockService interface
 type LockerStub struct {
-	IsEventProcessedCalled func(ctx context.Context, blockHash string) (bool, error)
-	HasConnectionCalled    func(ctx context.Context) bool
+	IsEventProcessedCalled    func(ctx context.Context, blockHash string) (bool, error)
+	SetBlockTimestampCalled   func(ctx context.Context, blockHash string, timestamp uint64) error
+	HasConnectionCalled       func(ctx context.Context) bool
 }
 
 // IsEventProcessed -
@@ -18,8 +23,15 @@ func (ls *LockerStub) IsEventProcessed(ctx context.Context, blockHash string) (b
 }
 
 func (ls *LockerStub) IsCrossShardConfirmation(ctx context.Context, originalTxHash string, event data.EventDuplicateCheck) (bool, error) {
-
 	return false, nil
+}
+
+// SetBlockTimestamp -
+func (ls *LockerStub) SetBlockTimestamp(ctx context.Context, blockHash string, timestamp uint64) error {
+	if ls.SetBlockTimestampCalled != nil {
+		return ls.SetBlockTimestampCalled(ctx, blockHash, timestamp)
+	}
+	return nil
 }
 
 // HasConnection -

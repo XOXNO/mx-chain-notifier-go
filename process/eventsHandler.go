@@ -91,6 +91,12 @@ func (eh *eventsHandler) HandleSaveBlockEvents(allEvents data.ArgsSaveBlockData)
 		return err
 	}
 
+	// Store block timestamp in Redis
+	err = eh.locker.SetBlockTimestamp(context.Background(), blockHash, eventsData.Header.GetTimeStamp())
+	if err != nil {
+		log.Warn("could not store block timestamp", "blockHash", blockHash, "error", err)
+	}
+
 	pushEvents := data.BlockEvents{
 		Hash:      eventsData.Hash,
 		ShardID:   eventsData.Header.GetShardID(),

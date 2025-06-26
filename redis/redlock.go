@@ -69,6 +69,13 @@ func (r *redlockWrapper) IsCrossShardConfirmation(ctx context.Context, originalT
 	return false, nil
 }
 
+// SetBlockTimestamp stores the timestamp for a given block hash
+func (r *redlockWrapper) SetBlockTimestamp(ctx context.Context, blockHash string, timestamp uint64) error {
+	key := fmt.Sprintf("block:timestamp:%s", blockHash)
+	timestampTTL := time.Hour * 48 // 48 hours TTL for block timestamps
+	return r.client.SetTimestamp(ctx, key, timestamp, timestampTTL)
+}
+
 // HasConnection returns true if the redis client is connected
 func (r *redlockWrapper) HasConnection(ctx context.Context) bool {
 	return r.client.IsConnected(ctx)

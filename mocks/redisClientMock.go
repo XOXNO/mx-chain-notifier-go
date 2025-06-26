@@ -58,6 +58,21 @@ func (rc *RedisClientMock) IsConnected(_ context.Context) bool {
 	return true
 }
 
+// AddEventToList -
+func (rc *RedisClientMock) AddEventToList(_ context.Context, key string, value string, ttl time.Duration) (int64, error) {
+	return 1, nil
+}
+
+// HasEvent -
+func (rc *RedisClientMock) HasEvent(_ context.Context, key string, value string) (bool, error) {
+	return false, nil
+}
+
+// SetTimestamp -
+func (rc *RedisClientMock) SetTimestamp(_ context.Context, key string, timestamp uint64, ttl time.Duration) error {
+	return nil
+}
+
 // IsInterfaceNil -
 func (rc *RedisClientMock) IsInterfaceNil() bool {
 	return rc == nil

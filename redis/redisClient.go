@@ -53,6 +53,11 @@ func (rc *redisClientWrapper) HasEvent(ctx context.Context, key string, value st
 	return rc.redis.SIsMember(ctx, key, value).Result()
 }
 
+// SetTimestamp will store a timestamp value for a given key
+func (rc *redisClientWrapper) SetTimestamp(ctx context.Context, key string, timestamp uint64, ttl time.Duration) error {
+	return rc.redis.Set(ctx, key, timestamp, ttl).Err()
+}
+
 // IsConnected will check if Redis is connected
 func (rc *redisClientWrapper) IsConnected(ctx context.Context) bool {
 	pong, err := rc.Ping(context.Background())

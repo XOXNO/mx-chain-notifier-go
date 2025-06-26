@@ -52,6 +52,10 @@ func (d *DispatcherMock) TxsEvent(event data.BlockTxs) {
 func (d *DispatcherMock) ScrsEvent(event data.BlockScrs) {
 }
 
+// AlteredAccounts -
+func (d *DispatcherMock) AlteredAccounts(event data.AlteredAccountsEvent) {
+}
+
 // Subscribe -
 func (d *DispatcherMock) Subscribe(event data.SubscribeEvent) {
 	d.hub.Subscribe(event)

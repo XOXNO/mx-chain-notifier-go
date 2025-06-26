@@ -23,6 +23,11 @@ func (drw *disabledRedlockWrapper) IsCrossShardConfirmation(ctx context.Context,
 	return true, nil
 }
 
+// SetBlockTimestamp does nothing and returns nil
+func (drw *disabledRedlockWrapper) SetBlockTimestamp(_ context.Context, _ string, _ uint64) error {
+	return nil
+}
+
 // HasConnection returns true
 func (drw *disabledRedlockWrapper) HasConnection(_ context.Context) bool {
 	return true
