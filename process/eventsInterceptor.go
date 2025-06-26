@@ -223,7 +223,7 @@ func (ei *eventsInterceptor) getLogEventsFromTransactionsPool(logs []*outport.Lo
 					Address:        bech32Address,
 					Identifier:     eventIdentifier,
 					Topics:         newTopics,
-					Data:           event.EventHandler.GetData(),
+					Data:           eventData,
 					TxHash:         event.TxHash,
 					OriginalTxHash: event.OriginalTxHash,
 				})
@@ -233,7 +233,7 @@ func (ei *eventsInterceptor) getLogEventsFromTransactionsPool(logs []*outport.Lo
 				Address:        bech32Address,
 				Identifier:     eventIdentifier,
 				Topics:         topics,
-				Data:           event.EventHandler.GetData(),
+				Data:           eventData,
 				TxHash:         event.TxHash,
 				OriginalTxHash: event.OriginalTxHash,
 			})

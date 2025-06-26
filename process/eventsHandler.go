@@ -327,9 +327,9 @@ func (eh *eventsHandler) handleBlockEventsWithOrder(blockTxs data.BlockEventsWit
 // handleBlockEventsWithOrder will handle full block events received from observer
 func (eh *eventsHandler) handleAlteredAccounts(alteredAccountsEvent data.AlteredAccountsEvent) {
 	if len(alteredAccountsEvent.Accounts) == 0 {
-		log.Warn("received empty accounts", "event", common.AlteredAccountsEvent,
-			"will process", false,
-		)
+		// log.Warn("received empty accounts", "event", common.AlteredAccountsEvent,
+		// 	"will process", false,
+		// )
 		return
 	}
 
