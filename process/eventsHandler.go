@@ -144,14 +144,14 @@ func (eh *eventsHandler) handlePushEvents(events data.BlockEvents) error {
 	}
 
 	if len(events.Events) == 0 {
-		log.Warn("received empty events", "event", common.PushLogsAndEvents,
-			"block hash", events.Hash,
-		)
+		// log.Warn("received empty events", "event", common.PushLogsAndEvents,
+		// 	"block hash", events.Hash,
+		// )
 		events.Events = make([]data.Event, 0)
 	} else {
-		log.Info("received", "event", common.PushLogsAndEvents,
-			"block hash", events.Hash,
-		)
+		// log.Info("received", "event", common.PushLogsAndEvents,
+		// 	"block hash", events.Hash,
+		// )
 	}
 
 	t := time.Now()
@@ -169,10 +169,10 @@ func (eh *eventsHandler) shouldProcessSaveBlockEvents(blockHash string) bool {
 	}
 
 	if !shouldProcessEvents {
-		log.Info("received duplicated push events",
-			"block hash", blockHash,
-			"will process", false,
-		)
+		// log.Info("received duplicated push events",
+		// 	"block hash", blockHash,
+		// 	"will process", false,
+		// )
 
 		return false
 	}
@@ -195,17 +195,17 @@ func (eh *eventsHandler) HandleRevertEvents(revertBlock data.RevertBlock) {
 	}
 
 	if !shouldProcessRevert {
-		log.Info("received duplicated events", "event", common.RevertBlockEvents,
-			"block hash", revertBlock.Hash,
-			"will process", false,
-		)
+		// log.Info("received duplicated events", "event", common.RevertBlockEvents,
+		// 	"block hash", revertBlock.Hash,
+		// 	"will process", false,
+		// )
 		return
 	}
 
-	log.Info("received", "event", common.RevertBlockEvents,
-		"block hash", revertBlock.Hash,
-		"will process", shouldProcessRevert,
-	)
+	// log.Info("received", "event", common.RevertBlockEvents,
+	// 	"block hash", revertBlock.Hash,
+	// 	"will process", shouldProcessRevert,
+	// )
 
 	t := time.Now()
 
@@ -229,17 +229,17 @@ func (eh *eventsHandler) HandleFinalizedEvents(finalizedBlock data.FinalizedBloc
 	}
 
 	if !shouldProcessFinalized {
-		log.Info("received duplicated events", "event", common.FinalizedBlockEvents,
-			"block hash", finalizedBlock.Hash,
-			"will process", false,
-		)
+		// log.Info("received duplicated events", "event", common.FinalizedBlockEvents,
+		// 	"block hash", finalizedBlock.Hash,
+		// 	"will process", false,
+		// )
 		return
 	}
 
-	log.Info("received", "event", common.FinalizedBlockEvents,
-		"block hash", finalizedBlock.Hash,
-		"will process", shouldProcessFinalized,
-	)
+	// log.Info("received", "event", common.FinalizedBlockEvents,
+	// 	"block hash", finalizedBlock.Hash,
+	// 	"will process", shouldProcessFinalized,
+	// )
 
 	t := time.Now()
 
@@ -259,13 +259,13 @@ func (eh *eventsHandler) handleBlockTxs(blockTxs data.BlockTxs) {
 	}
 
 	if len(blockTxs.Txs) == 0 {
-		log.Warn("received empty events", "event", common.BlockTxs,
-			"block hash", blockTxs.Hash,
-		)
+		// log.Warn("received empty events", "event", common.BlockTxs,
+		// 	"block hash", blockTxs.Hash,
+		// )
 	} else {
-		log.Info("received", "event", common.BlockTxs,
-			"block hash", blockTxs.Hash,
-		)
+		// log.Info("received", "event", common.BlockTxs,
+		// 	"block hash", blockTxs.Hash,
+		// )
 	}
 
 	t := time.Now()
@@ -286,13 +286,13 @@ func (eh *eventsHandler) handleBlockScrs(blockScrs data.BlockScrs) {
 	}
 
 	if len(blockScrs.Scrs) == 0 {
-		log.Warn("received empty events", "event", common.BlockScrs,
-			"block hash", blockScrs.Hash,
-		)
+		// log.Warn("received empty events", "event", common.BlockScrs,
+		// 	"block hash", blockScrs.Hash,
+		// )
 	} else {
-		log.Info("received", "event", common.BlockScrs,
-			"block hash", blockScrs.Hash,
-		)
+		// log.Info("received", "event", common.BlockScrs,
+		// 	"block hash", blockScrs.Hash,
+		// )
 	}
 
 	t := time.Now()
@@ -312,9 +312,9 @@ func (eh *eventsHandler) handleBlockEventsWithOrder(blockTxs data.BlockEventsWit
 		return
 	}
 
-	log.Info("received", "event", common.BlockEvents,
-		"block hash", blockTxs.Hash,
-	)
+	// log.Info("received", "event", common.BlockEvents,
+	// 	"block hash", blockTxs.Hash,
+	// )
 
 	t := time.Now()
 
@@ -333,9 +333,9 @@ func (eh *eventsHandler) handleAlteredAccounts(alteredAccountsEvent data.Altered
 		return
 	}
 
-	log.Info("received", "event", common.AlteredAccountsEvent,
-		"block hash", alteredAccountsEvent.Hash,
-	)
+	// log.Info("received", "event", common.AlteredAccountsEvent,
+	// 	"block hash", alteredAccountsEvent.Hash,
+	// )
 
 	t := time.Now()
 
