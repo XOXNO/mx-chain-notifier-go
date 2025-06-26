@@ -2,6 +2,7 @@ package process
 
 import (
 	"github.com/multiversx/mx-chain-core-go/data/outport"
+	"github.com/multiversx/mx-chain-core-go/data/smartContractResult"
 	"github.com/multiversx/mx-chain-notifier-go/data"
 )
 
@@ -36,6 +37,6 @@ func (eh *eventsHandler) ShouldProcessSaveBlockEvents(blockHash string) bool {
 }
 
 // GetLogEventsFromTransactionsPool exports internal method for testing
-func (ei *eventsInterceptor) GetLogEventsFromTransactionsPool(logs []*outport.LogData) []data.Event {
-	return ei.getLogEventsFromTransactionsPool(logs)
+func (ei *eventsInterceptor) GetLogEventsFromTransactionsPool(logs []*outport.LogData, scrs map[string]*smartContractResult.SmartContractResult) []data.Event {
+	return ei.getLogEventsFromTransactionsPool(logs, scrs)
 }

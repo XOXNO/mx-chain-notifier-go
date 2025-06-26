@@ -23,9 +23,6 @@ func createDefaultDataProcessors() map[uint32]process.DataProcessor {
 		Facade:     &mocks.FacadeStub{},
 	}
 
-	eventsProcessorV0, _ := preprocess.NewEventsPreProcessorV0(dataPreProcessorArgs)
-	eventsProcessors[common.PayloadV0] = eventsProcessorV0
-
 	eventsProcessorV1, _ := preprocess.NewEventsPreProcessorV1(dataPreProcessorArgs)
 	eventsProcessors[common.PayloadV1] = eventsProcessorV1
 

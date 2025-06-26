@@ -62,12 +62,6 @@ func CreatePayloadHandler(marshaller marshal.Marshalizer, facade process.EventsF
 func createEventsDataPreProcessors(dataPreProcessorArgs preprocess.ArgsEventsPreProcessor) (map[uint32]process.DataProcessor, error) {
 	eventsProcessors := make(map[uint32]process.DataProcessor)
 
-	eventsProcessorV0, err := preprocess.NewEventsPreProcessorV0(dataPreProcessorArgs)
-	if err != nil {
-		return nil, err
-	}
-	eventsProcessors[common.PayloadV0] = eventsProcessorV0
-
 	eventsProcessorV1, err := preprocess.NewEventsPreProcessorV1(dataPreProcessorArgs)
 	if err != nil {
 		return nil, err

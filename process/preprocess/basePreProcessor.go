@@ -87,3 +87,8 @@ func createEmptyBlockCreatorContainer() (EmptyBlockCreatorContainer, error) {
 
 	return container, nil
 }
+
+// GetMarshaller returns the marshaller instance
+func (bep *baseEventsPreProcessor) GetMarshaller() marshal.Marshalizer {
+	return bep.marshaller
+}

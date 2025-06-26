@@ -6,6 +6,7 @@ import (
 
 	"github.com/multiversx/mx-chain-core-go/core"
 	"github.com/multiversx/mx-chain-core-go/data/outport"
+	logger "github.com/multiversx/mx-chain-logger-go"
 	"github.com/multiversx/mx-chain-notifier-go/data"
 )
 
@@ -19,6 +20,8 @@ var (
 	// ErrNilHeaderGasConsumption signals that a nil header gas consumption has been provided
 	ErrNilHeaderGasConsumption = errors.New("nil header gas consumption")
 )
+
+var preprocessorLog = logger.GetOrCreate("eventsPreProcessorV1")
 
 type eventsPreProcessorV1 struct {
 	*baseEventsPreProcessor
@@ -41,16 +44,22 @@ func (d *eventsPreProcessorV1) SaveBlock(marshalledData []byte) error {
 	outportBlock := &outport.OutportBlock{}
 	err := d.marshaller.Unmarshal(outportBlock, marshalledData)
 	if err != nil {
+		preprocessorLog.Error("eventsPreProcessorV1: failed to unmarshal SaveBlock data", "error", err)
 		return err
 	}
 
+	blockHash := hex.EncodeToString(outportBlock.BlockData.HeaderHash)
+	preprocessorLog.Info("eventsPreProcessorV1: processing SaveBlock", "blockHash", blockHash)
+
 	err = checkBlockDataValid(outportBlock)
 	if err != nil {
+		preprocessorLog.Error("eventsPreProcessorV1: SaveBlock validation failed", "blockHash", blockHash, "error", err)
 		return err
 	}
 
 	header, err := d.getHeaderFromBytes(core.HeaderType(outportBlock.BlockData.HeaderType), outportBlock.BlockData.HeaderBytes)
 	if err != nil {
+		preprocessorLog.Error("eventsPreProcessorV1: failed to parse SaveBlock header", "blockHash", blockHash, "error", err)
 		return err
 	}
 
@@ -66,11 +75,14 @@ func (d *eventsPreProcessorV1) SaveBlock(marshalledData []byte) error {
 		Header:                 header,
 	}
 
+	preprocessorLog.Info("eventsPreProcessorV1: calling HandlePushEvents", "blockHash", blockHash)
 	err = d.facade.HandlePushEvents(*saveBlockData)
 	if err != nil {
+		preprocessorLog.Error("eventsPreProcessorV1: HandlePushEvents failed", "blockHash", blockHash, "error", err)
 		return err
 	}
 
+	preprocessorLog.Info("eventsPreProcessorV1: SaveBlock completed successfully", "blockHash", blockHash)
 	return nil
 }
 
@@ -120,14 +132,20 @@ func (d *eventsPreProcessorV1) FinalizedBlock(marshalledData []byte) error {
 	finalizedBlock := &outport.FinalizedBlock{}
 	err := d.marshaller.Unmarshal(finalizedBlock, marshalledData)
 	if err != nil {
+		preprocessorLog.Error("eventsPreProcessorV1: failed to unmarshal FinalizedBlock data", "error", err)
 		return err
 	}
 
+	blockHash := hex.EncodeToString(finalizedBlock.GetHeaderHash())
+	preprocessorLog.Info("eventsPreProcessorV1: processing FinalizedBlock", "blockHash", blockHash)
+
 	finalizedData := data.FinalizedBlock{
-		Hash: hex.EncodeToString(finalizedBlock.GetHeaderHash()),
+		Hash: blockHash,
 	}
 
+	preprocessorLog.Info("eventsPreProcessorV1: calling HandleFinalizedEvents", "blockHash", blockHash)
 	d.facade.HandleFinalizedEvents(finalizedData)
+	preprocessorLog.Info("eventsPreProcessorV1: FinalizedBlock completed successfully", "blockHash", blockHash)
 
 	return nil
 }
