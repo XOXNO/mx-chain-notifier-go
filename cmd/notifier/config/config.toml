@@ -5,11 +5,11 @@
 
     # ExternalMarshaller is used for handling incoming/outcoming api requests 
     [General.ExternalMarshaller]
-        Type = "json"
+        Type = "gogo protobuf"
     # InternalMarshaller is used for handling internal structs
     # This has to be mapped with the internal marshalling used for notifier outport driver
     [General.InternalMarshaller]
-        Type = "json"
+        Type = "gogo protobuf"
 
     # Address pubkey converter config options
     [General.AddressConverter]
