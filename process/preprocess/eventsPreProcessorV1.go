@@ -137,15 +137,15 @@ func (d *eventsPreProcessorV1) FinalizedBlock(marshalledData []byte) error {
 	}
 
 	blockHash := hex.EncodeToString(finalizedBlock.GetHeaderHash())
-	preprocessorLog.Info("eventsPreProcessorV1: processing FinalizedBlock", "blockHash", blockHash)
+	preprocessorLog.Debug("eventsPreProcessorV1: processing FinalizedBlock", "blockHash", blockHash)
 
 	finalizedData := data.FinalizedBlock{
 		Hash: blockHash,
 	}
 
-	preprocessorLog.Info("eventsPreProcessorV1: calling HandleFinalizedEvents", "blockHash", blockHash)
+	preprocessorLog.Debug("eventsPreProcessorV1: calling HandleFinalizedEvents", "blockHash", blockHash)
 	d.facade.HandleFinalizedEvents(finalizedData)
-	preprocessorLog.Info("eventsPreProcessorV1: FinalizedBlock completed successfully", "blockHash", blockHash)
+	preprocessorLog.Debug("eventsPreProcessorV1: FinalizedBlock completed successfully", "blockHash", blockHash)
 
 	return nil
 }

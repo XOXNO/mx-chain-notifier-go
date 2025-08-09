@@ -128,7 +128,12 @@ func (sb *serviceBusClient) Publish(exchangeConfig config.ServiceBusExchangeConf
 		}
 	}
 
-	clientLog.Info("servicebus-client: published messages", "topic", exchangeConfig.Topic, "messageCount", len(messages))
+	// Only log at INFO for the primary events topic; others at DEBUG to reduce noise
+	if exchangeConfig.Topic == cfg.EventsExchange.Topic {
+		clientLog.Info("servicebus-client: published messages", "topic", exchangeConfig.Topic, "messageCount", len(messages))
+	} else {
+		clientLog.Debug("servicebus-client: published messages", "topic", exchangeConfig.Topic, "messageCount", len(messages))
+	}
 	return nil
 }
 

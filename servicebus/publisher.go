@@ -148,7 +148,7 @@ func (sb *serviceBusPublisher) Publish(events data.BlockEvents) {
 		return
 	}
 
-	// Summary per block
+	// Summary per block (keep INFO only for events topic)
 	log.Info("servicebus: published events for block", "blockHash", events.Hash, "messageCount", len(messages), "skippedCount", skippedCount, "topic", sb.cfg.EventsExchange.Topic)
 }
 
@@ -246,7 +246,7 @@ func (sb *serviceBusPublisher) PublishRevert(revertBlock data.RevertBlock) {
 		log.Error("failed to publish revert event to servicebus", "hash", revertBlock.Hash, "exchange", sb.cfg.RevertEventsExchange.Topic, "err", err.Error())
 		return
 	}
-	log.Info("servicebus: published revert event", "blockHash", revertBlock.Hash, "messageCount", len(messages), "topic", sb.cfg.RevertEventsExchange.Topic)
+	log.Debug("servicebus: published revert event", "blockHash", revertBlock.Hash, "messageCount", len(messages), "topic", sb.cfg.RevertEventsExchange.Topic)
 }
 
 func (sb *serviceBusPublisher) PublishFinalized(finalizedBlock data.FinalizedBlock) {
@@ -270,7 +270,7 @@ func (sb *serviceBusPublisher) PublishFinalized(finalizedBlock data.FinalizedBlo
 		log.Error("failed to publish finalized event to servicebus", "hash", finalizedBlock.Hash, "exchange", sb.cfg.FinalizedEventsExchange.Topic, "err", err.Error())
 		return
 	}
-	log.Info("servicebus: published finalized event", "blockHash", finalizedBlock.Hash, "messageCount", len(messages), "topic", sb.cfg.FinalizedEventsExchange.Topic)
+	log.Debug("servicebus: published finalized event", "blockHash", finalizedBlock.Hash, "messageCount", len(messages), "topic", sb.cfg.FinalizedEventsExchange.Topic)
 }
 
 func (sb *serviceBusPublisher) PublishTxs(blockTxs data.BlockTxs) {
@@ -301,7 +301,7 @@ func (sb *serviceBusPublisher) PublishTxs(blockTxs data.BlockTxs) {
 		log.Error("failed to publish block txs event to servicebus", "hash", blockTxs.Hash, "messageCount", len(messages), "exchange", sb.cfg.BlockTxsExchange.Topic, "err", err.Error())
 		return
 	}
-	log.Info("servicebus: published txs for block", "blockHash", blockTxs.Hash, "messageCount", len(messages), "topic", sb.cfg.BlockTxsExchange.Topic)
+	log.Debug("servicebus: published txs for block", "blockHash", blockTxs.Hash, "messageCount", len(messages), "topic", sb.cfg.BlockTxsExchange.Topic)
 }
 
 func (sb *serviceBusPublisher) PublishAlteredAccounts(accounts data.AlteredAccountsEvent) {
@@ -332,7 +332,7 @@ func (sb *serviceBusPublisher) PublishAlteredAccounts(accounts data.AlteredAccou
 		log.Error("failed to publish altered accounts event to servicebus", "hash", accounts.Hash, "messageCount", len(messages), "exchange", sb.cfg.AlteredAccountsExchange.Topic, "err", err.Error())
 		return
 	}
-	log.Info("servicebus: published altered accounts for block", "blockHash", accounts.Hash, "messageCount", len(messages), "topic", sb.cfg.AlteredAccountsExchange.Topic)
+	log.Debug("servicebus: published altered accounts for block", "blockHash", accounts.Hash, "messageCount", len(messages), "topic", sb.cfg.AlteredAccountsExchange.Topic)
 }
 
 func (sb *serviceBusPublisher) PublishScrs(blockScrs data.BlockScrs) {
@@ -363,7 +363,7 @@ func (sb *serviceBusPublisher) PublishScrs(blockScrs data.BlockScrs) {
 		log.Error("failed to publish block scrs event to servicebus", "hash", blockScrs.Hash, "messageCount", len(messages), "exchange", sb.cfg.BlockScrsExchange.Topic, "err", err.Error())
 		return
 	}
-	log.Info("servicebus: published SCRs for block", "blockHash", blockScrs.Hash, "messageCount", len(messages), "topic", sb.cfg.BlockScrsExchange.Topic)
+	log.Debug("servicebus: published SCRs for block", "blockHash", blockScrs.Hash, "messageCount", len(messages), "topic", sb.cfg.BlockScrsExchange.Topic)
 }
 
 func (sb *serviceBusPublisher) PublishBlockEventsWithOrder(blockTxs data.BlockEventsWithOrder) {
@@ -388,7 +388,7 @@ func (sb *serviceBusPublisher) PublishBlockEventsWithOrder(blockTxs data.BlockEv
 		log.Error("failed to publish full block events to servicebus", "hash", blockTxs.Hash, "exchange", sb.cfg.BlockEventsExchange.Topic, "err", err.Error())
 		return
 	}
-	log.Info("servicebus: published full block events", "blockHash", blockTxs.Hash, "messageCount", len(messages), "topic", sb.cfg.BlockEventsExchange.Topic)
+	log.Debug("servicebus: published full block events", "blockHash", blockTxs.Hash, "messageCount", len(messages), "topic", sb.cfg.BlockEventsExchange.Topic)
 }
 
 func (sb *serviceBusPublisher) publishFanout(exchangeConfig config.ServiceBusExchangeConfig, payload []*azservicebus.Message) error {
