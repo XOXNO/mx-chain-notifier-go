@@ -143,11 +143,11 @@ func (ei *eventsInterceptor) getLogEventsFromTransactionsPool(logs []*outport.Lo
 					// Save this as already seen in this logs block
 					duplicateTwiceSameBlock[originalTxHash+hexData] = true
 					if err != nil {
-						log.Info("eventsInterceptor: failed to check cross shard confirmation", "error", err)
+						log.Error("eventsInterceptor: failed to check cross shard confirmation", "error", err)
 						continue
 					}
 					if skipEvent {
-						log.Info("eventsInterceptor: skip cross shard confirmation event", "txHash", logData.TxHash, "originalTxHash", originalTxHash, "eventIdentifier", eventIdentifier)
+						log.Debug("eventsInterceptor: skip cross shard confirmation event", "txHash", logData.TxHash, "originalTxHash", originalTxHash, "eventIdentifier", eventIdentifier)
 						continue
 					}
 				}

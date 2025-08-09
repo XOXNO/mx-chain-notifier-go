@@ -88,6 +88,7 @@ func (eh *eventsHandler) HandleSaveBlockEvents(allEvents data.ArgsSaveBlockData)
 
 	eventsData, err := eh.eventsInterceptor.ProcessBlockEvents(&allEvents)
 	if err != nil {
+		log.Error("eventsHandler: failed to process block events", "blockHash", blockHash, "error", err)
 		return err
 	}
 
@@ -107,6 +108,9 @@ func (eh *eventsHandler) HandleSaveBlockEvents(allEvents data.ArgsSaveBlockData)
 	if err != nil {
 		return err
 	}
+
+	// Log completion after dedupe gate to avoid duplicate "completed" lines with multiple observers
+	log.Info("eventsHandler: save block processed", "blockHash", blockHash, "events", len(eventsData.LogEvents), "txs", len(eventsData.Txs), "scrs", len(eventsData.Scrs), "alteredAccounts", len(eventsData.AlteredAccounts))
 
 	txs := data.BlockTxs{
 		Hash: eventsData.Hash,
@@ -175,10 +179,10 @@ func (eh *eventsHandler) shouldProcessSaveBlockEvents(blockHash string) bool {
 	}
 
 	if !shouldProcessEvents {
-		// log.Info("received duplicated push events",
-		// 	"block hash", blockHash,
-		// 	"will process", false,
-		// )
+		log.Info("received duplicated push events",
+			"block hash", blockHash,
+			"will process", false,
+		)
 
 		return false
 	}

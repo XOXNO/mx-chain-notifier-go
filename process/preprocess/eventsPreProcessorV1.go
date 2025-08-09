@@ -75,14 +75,12 @@ func (d *eventsPreProcessorV1) SaveBlock(marshalledData []byte) error {
 		Header:                 header,
 	}
 
-	preprocessorLog.Info("eventsPreProcessorV1: calling HandlePushEvents", "blockHash", blockHash)
 	err = d.facade.HandlePushEvents(*saveBlockData)
 	if err != nil {
 		preprocessorLog.Error("eventsPreProcessorV1: HandlePushEvents failed", "blockHash", blockHash, "error", err)
 		return err
 	}
 
-	preprocessorLog.Info("eventsPreProcessorV1: SaveBlock completed successfully", "blockHash", blockHash)
 	return nil
 }
 
