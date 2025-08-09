@@ -130,6 +130,9 @@ func (sb *serviceBusPublisher) Publish(events data.BlockEvents) {
 
 		// Add block-level metadata for easier correlation
 		msg.ApplicationProperties["BlockHash"] = events.Hash
+		// Set CorrelationID to the block hash for cross-message correlation
+		bh := events.Hash
+		msg.CorrelationID = &bh
 
 		// Helpful debug per event/tx
 		log.Debug("servicebus: queue event for publish", "blockHash", events.Hash, "txHash", event.TxHash, "identifier", event.Identifier)
@@ -237,6 +240,9 @@ func (sb *serviceBusPublisher) PublishRevert(revertBlock data.RevertBlock) {
 		Body:                  revertBlockBytes,
 		SessionID:             &revertBlock.Hash,
 		ApplicationProperties: make(map[string]interface{})}
+	// Correlate on block hash
+	rh := revertBlock.Hash
+	msg.CorrelationID = &rh
 
 	msg.ApplicationProperties["Hash"] = revertBlock.Hash
 	messages = append(messages, msg)
@@ -261,6 +267,9 @@ func (sb *serviceBusPublisher) PublishFinalized(finalizedBlock data.FinalizedBlo
 		Body:                  finalizedBlockBytes,
 		SessionID:             &finalizedBlock.Hash,
 		ApplicationProperties: make(map[string]interface{})}
+	// Correlate on block hash
+	fh := finalizedBlock.Hash
+	msg.CorrelationID = &fh
 
 	msg.ApplicationProperties["Hash"] = finalizedBlock.Hash
 	messages = append(messages, msg)
@@ -286,6 +295,9 @@ func (sb *serviceBusPublisher) PublishTxs(blockTxs data.BlockTxs) {
 			Body:                  event,
 			SessionID:             &blockTxs.Hash,
 			ApplicationProperties: make(map[string]interface{})}
+		// Correlate on block hash
+		th := blockTxs.Hash
+		msg.CorrelationID = &th
 
 		msg.ApplicationProperties["Hash"] = blockTxs.Hash
 		messages = append(messages, msg)
@@ -317,6 +329,9 @@ func (sb *serviceBusPublisher) PublishAlteredAccounts(accounts data.AlteredAccou
 			Body:                  event,
 			SessionID:             &account.Address,
 			ApplicationProperties: make(map[string]interface{})}
+		// Correlate on block hash
+		ah := accounts.Hash
+		msg.CorrelationID = &ah
 
 		msg.ApplicationProperties["Address"] = account.Address
 		msg.ApplicationProperties["Hash"] = accounts.Hash
@@ -348,6 +363,9 @@ func (sb *serviceBusPublisher) PublishScrs(blockScrs data.BlockScrs) {
 			Body:                  event,
 			SessionID:             &blockScrs.Hash,
 			ApplicationProperties: make(map[string]interface{})}
+		// Correlate on block hash
+		sh := blockScrs.Hash
+		msg.CorrelationID = &sh
 
 		msg.ApplicationProperties["BlockHash"] = blockScrs.Hash
 		messages = append(messages, msg)
@@ -379,6 +397,9 @@ func (sb *serviceBusPublisher) PublishBlockEventsWithOrder(blockTxs data.BlockEv
 		Body:                  txsBlockBytes,
 		SessionID:             &blockTxs.Hash,
 		ApplicationProperties: make(map[string]interface{})}
+	// Correlate on block hash
+	beh := blockTxs.Hash
+	msg.CorrelationID = &beh
 
 	msg.ApplicationProperties["Hash"] = blockTxs.Hash
 	messages = append(messages, msg)
