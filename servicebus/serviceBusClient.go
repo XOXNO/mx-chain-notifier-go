@@ -23,9 +23,7 @@ const (
 	backoffMultiplier  = 2.0
 	deliveryTimeoutSec = 30
 
-	// Operational constants
-	minBatchSize = 1
-	maxBatchSize = 256 // Azure Service Bus limit
+	// Operational constants (kept for reference)
 )
 
 type serviceBusClient struct {
@@ -33,6 +31,10 @@ type serviceBusClient struct {
 	publishMutex sync.Mutex
 
 	client *azservicebus.Client
+
+	// Cached senders per topic to avoid re-creating/closing on every publish
+	senders     map[string]*azservicebus.Sender
+	sendersLock sync.Mutex
 }
 
 // NewServiceBusClient creates a new Azure Service Bus client instance
@@ -40,6 +42,7 @@ func NewServiceBusClient(url string) (*serviceBusClient, error) {
 	sb := &serviceBusClient{
 		url:          url,
 		publishMutex: sync.Mutex{},
+		senders:      make(map[string]*azservicebus.Sender),
 	}
 
 	err := sb.connect()
@@ -62,19 +65,16 @@ func (sb *serviceBusClient) Publish(exchangeConfig config.ServiceBusExchangeConf
 		return nil
 	}
 
-	if len(messages) > maxBatchSize {
-		clientLog.Warn("batch size exceeds maximum limit, truncating", "requestedSize", len(messages), "maxSize", maxBatchSize, "topic", exchangeConfig.Topic)
-		messages = messages[:maxBatchSize]
-	}
+	// Note: do NOT truncate messages; we will stream them across as many batches as needed
+	clientLog.Debug("servicebus-client: start publish", "topic", exchangeConfig.Topic, "messageCount", len(messages))
 
 	sb.publishMutex.Lock()
 	defer sb.publishMutex.Unlock()
 
-	sender, err := sb.createSender(exchangeConfig.Topic)
+	sender, err := sb.getOrCreateSender(exchangeConfig.Topic)
 	if err != nil {
 		return err
 	}
-	defer sb.closeSender(sender, exchangeConfig.Topic)
 
 	currentMessageBatch, err := sender.NewMessageBatch(context.Background(), nil)
 	if err != nil {
@@ -88,8 +88,9 @@ func (sb *serviceBusClient) Publish(exchangeConfig config.ServiceBusExchangeConf
 
 		if errors.Is(err, azservicebus.ErrMessageTooLarge) {
 			if currentMessageBatch.NumMessages() == 0 {
-				clientLog.Error("message too large for batch", "topic", exchangeConfig.Topic)
-				return err
+				// Single message too large to fit in an empty batch: skip this message and continue
+				clientLog.Warn("message too large for empty batch, skipping", "topic", exchangeConfig.Topic)
+				continue
 			}
 
 			clientLog.Debug("batch full, sending and creating new batch", "messageCount", currentMessageBatch.NumMessages(), "topic", exchangeConfig.Topic)
@@ -127,6 +128,7 @@ func (sb *serviceBusClient) Publish(exchangeConfig config.ServiceBusExchangeConf
 		}
 	}
 
+	clientLog.Info("servicebus-client: published messages", "topic", exchangeConfig.Topic, "messageCount", len(messages))
 	return nil
 }
 
@@ -149,11 +151,37 @@ func (sb *serviceBusClient) createSender(topic string) (*azservicebus.Sender, er
 	return sender, nil
 }
 
-// closeSender safely closes the sender with error logging
-func (sb *serviceBusClient) closeSender(sender *azservicebus.Sender, topic string) {
-	if err := sender.Close(context.Background()); err != nil {
-		clientLog.Warn("failed to close sender", "topic", topic, "err", err.Error())
+// getOrCreateSender returns a cached sender for the topic, creating it if needed
+func (sb *serviceBusClient) getOrCreateSender(topic string) (*azservicebus.Sender, error) {
+	sb.sendersLock.Lock()
+	defer sb.sendersLock.Unlock()
+
+	if s, ok := sb.senders[topic]; ok && s != nil {
+		return s, nil
 	}
+
+	sender, err := sb.createSender(topic)
+	if err != nil {
+		return nil, err
+	}
+	sb.senders[topic] = sender
+	return sender, nil
+}
+
+// closeAllSenders closes and clears all cached senders
+func (sb *serviceBusClient) closeAllSenders() {
+	sb.sendersLock.Lock()
+	defer sb.sendersLock.Unlock()
+
+	for topic, sender := range sb.senders {
+		if sender == nil {
+			continue
+		}
+		if err := sender.Close(context.Background()); err != nil {
+			clientLog.Warn("failed to close sender", "topic", topic, "err", err.Error())
+		}
+	}
+	sb.senders = make(map[string]*azservicebus.Sender)
 }
 
 // sendWithRetry sends a message batch with exponential backoff retry logic
@@ -213,6 +241,7 @@ func (sb *serviceBusClient) Reconnect() {
 
 // Close closes the Azure Service Bus client connection
 func (sb *serviceBusClient) Close() {
+	sb.closeAllSenders()
 	err := sb.client.Close(context.Background())
 	if err != nil {
 		clientLog.Error("failed to close servicebus client", "err", err.Error())

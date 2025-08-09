@@ -35,7 +35,7 @@
     RetryDurationInSec = 5
 
     # Signals if in case of data payload processing error, we should send the ack signal or not
-    BlockingAckOnError = false
+    BlockingAckOnError = true
 
     # Set to true to drop messages if there is no active WebSocket connection to send to.
     DropMessagesIfNoConnection = false

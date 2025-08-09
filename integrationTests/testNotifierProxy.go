@@ -64,7 +64,7 @@ func NewTestNotifierWithWS(cfg config.MainConfig) (*testNotifier, error) {
 
 	argsEventsHandler := process.ArgsEventsHandler{
 		Locker:               locker,
-		Publisher:            publisher,
+		Publishers:           []process.Publisher{publisher},
 		StatusMetricsHandler: statusMetricsHandler,
 		CheckDuplicates:      cfg.General.CheckDuplicates,
 		EventsInterceptor:    eventsInterceptor,
@@ -149,7 +149,7 @@ func NewTestNotifierWithRabbitMq(cfg config.MainConfig) (*testNotifier, error) {
 
 	argsEventsHandler := process.ArgsEventsHandler{
 		Locker:               locker,
-		Publisher:            publisher,
+		Publishers:           []process.Publisher{publisher},
 		StatusMetricsHandler: statusMetricsHandler,
 		CheckDuplicates:      cfg.General.CheckDuplicates,
 		EventsInterceptor:    eventsInterceptor,

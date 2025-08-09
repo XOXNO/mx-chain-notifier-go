@@ -2,6 +2,7 @@ package servicebus
 
 import (
 	"encoding/hex"
+	"unicode/utf8"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus"
 	"github.com/multiversx/mx-chain-core-go/core"
@@ -111,18 +112,27 @@ func (sb *serviceBusPublisher) Publish(events data.BlockEvents) {
 	}
 
 	messages := make([]*azservicebus.Message, 0, len(events.Events))
+	skippedCount := 0
 
 	for _, event := range events.Events {
 		// Skip execution logs if configured
 		if sb.cfg.SkipExecutionEventLogs && executionEvents[event.Identifier] {
+			skippedCount++
 			continue
 		}
 
 		msg, err := sb.createMessageFromEvent(event)
 		if err != nil {
 			log.Error("failed to create message from event", "address", event.Address, "identifier", event.Identifier, "err", err)
-			return
+			// continue with the rest of the events instead of aborting the whole block
+			continue
 		}
+
+		// Add block-level metadata for easier correlation
+		msg.ApplicationProperties["BlockHash"] = events.Hash
+
+		// Helpful debug per event/tx
+		log.Debug("servicebus: queue event for publish", "blockHash", events.Hash, "txHash", event.TxHash, "identifier", event.Identifier)
 
 		messages = append(messages, msg)
 	}
@@ -135,7 +145,11 @@ func (sb *serviceBusPublisher) Publish(events data.BlockEvents) {
 	err := sb.publishFanout(sb.cfg.EventsExchange, messages)
 	if err != nil {
 		log.Error("failed to publish events to servicebus", "messageCount", len(messages), "exchange", sb.cfg.EventsExchange.Topic, "err", err.Error())
+		return
 	}
+
+	// Summary per block
+	log.Info("servicebus: published events for block", "blockHash", events.Hash, "messageCount", len(messages), "skippedCount", skippedCount, "topic", sb.cfg.EventsExchange.Topic)
 }
 
 // createMessageFromEvent creates a Service Bus message from a blockchain event
@@ -150,7 +164,8 @@ func (sb *serviceBusPublisher) createMessageFromEvent(event data.Event) (*azserv
 			if hexStr == "" {
 				isNFT = "false"
 			}
-			sessionId = string(event.Topics[0])
+			// Use a safe, bounded session ID derived from topic[0]
+			sessionId = sanitizeSessionID(event.Topics[0])
 		}
 	}
 
@@ -178,6 +193,38 @@ func (sb *serviceBusPublisher) createMessageFromEvent(event data.Event) (*azserv
 	return msg, nil
 }
 
+// sanitizeSessionID converts raw bytes into a UTF-8 safe string, falling back to hex encoding
+// and truncates to a safe maximum length supported by Azure Service Bus SessionID (128 chars).
+func sanitizeSessionID(raw []byte) string {
+	const maxSessionIDLen = 128
+	sid := ""
+	if utf8.Valid(raw) {
+		sid = string(raw)
+	} else {
+		sid = hex.EncodeToString(raw)
+	}
+	if len(sid) > maxSessionIDLen {
+		// Truncate without splitting multi-byte characters by iterating runes
+		// If sid came from hex, rune boundaries == byte boundaries, so this is safe and efficient enough
+		truncated := make([]rune, 0, maxSessionIDLen)
+		count := 0
+		for _, r := range sid {
+			rl := len(string(r))
+			if count+rl > maxSessionIDLen {
+				break
+			}
+			truncated = append(truncated, r)
+			count += rl
+		}
+		sid = string(truncated)
+	}
+	if sid == "" {
+		// Fallback to a constant to avoid empty session
+		sid = "default-session"
+	}
+	return sid
+}
+
 func (sb *serviceBusPublisher) PublishRevert(revertBlock data.RevertBlock) {
 	revertBlockBytes, err := sb.marshaller.Marshal(revertBlock)
 	if err != nil {
@@ -197,7 +244,9 @@ func (sb *serviceBusPublisher) PublishRevert(revertBlock data.RevertBlock) {
 	err = sb.publishFanout(sb.cfg.RevertEventsExchange, messages)
 	if err != nil {
 		log.Error("failed to publish revert event to servicebus", "hash", revertBlock.Hash, "exchange", sb.cfg.RevertEventsExchange.Topic, "err", err.Error())
+		return
 	}
+	log.Info("servicebus: published revert event", "blockHash", revertBlock.Hash, "messageCount", len(messages), "topic", sb.cfg.RevertEventsExchange.Topic)
 }
 
 func (sb *serviceBusPublisher) PublishFinalized(finalizedBlock data.FinalizedBlock) {
@@ -219,7 +268,9 @@ func (sb *serviceBusPublisher) PublishFinalized(finalizedBlock data.FinalizedBlo
 	err = sb.publishFanout(sb.cfg.FinalizedEventsExchange, messages)
 	if err != nil {
 		log.Error("failed to publish finalized event to servicebus", "hash", finalizedBlock.Hash, "exchange", sb.cfg.FinalizedEventsExchange.Topic, "err", err.Error())
+		return
 	}
+	log.Info("servicebus: published finalized event", "blockHash", finalizedBlock.Hash, "messageCount", len(messages), "topic", sb.cfg.FinalizedEventsExchange.Topic)
 }
 
 func (sb *serviceBusPublisher) PublishTxs(blockTxs data.BlockTxs) {
@@ -248,7 +299,9 @@ func (sb *serviceBusPublisher) PublishTxs(blockTxs data.BlockTxs) {
 	err := sb.publishFanout(sb.cfg.BlockTxsExchange, messages)
 	if err != nil {
 		log.Error("failed to publish block txs event to servicebus", "hash", blockTxs.Hash, "messageCount", len(messages), "exchange", sb.cfg.BlockTxsExchange.Topic, "err", err.Error())
+		return
 	}
+	log.Info("servicebus: published txs for block", "blockHash", blockTxs.Hash, "messageCount", len(messages), "topic", sb.cfg.BlockTxsExchange.Topic)
 }
 
 func (sb *serviceBusPublisher) PublishAlteredAccounts(accounts data.AlteredAccountsEvent) {
@@ -277,7 +330,9 @@ func (sb *serviceBusPublisher) PublishAlteredAccounts(accounts data.AlteredAccou
 	err := sb.publishFanout(sb.cfg.AlteredAccountsExchange, messages)
 	if err != nil {
 		log.Error("failed to publish altered accounts event to servicebus", "hash", accounts.Hash, "messageCount", len(messages), "exchange", sb.cfg.AlteredAccountsExchange.Topic, "err", err.Error())
+		return
 	}
+	log.Info("servicebus: published altered accounts for block", "blockHash", accounts.Hash, "messageCount", len(messages), "topic", sb.cfg.AlteredAccountsExchange.Topic)
 }
 
 func (sb *serviceBusPublisher) PublishScrs(blockScrs data.BlockScrs) {
@@ -306,7 +361,9 @@ func (sb *serviceBusPublisher) PublishScrs(blockScrs data.BlockScrs) {
 	err := sb.publishFanout(sb.cfg.BlockScrsExchange, messages)
 	if err != nil {
 		log.Error("failed to publish block scrs event to servicebus", "hash", blockScrs.Hash, "messageCount", len(messages), "exchange", sb.cfg.BlockScrsExchange.Topic, "err", err.Error())
+		return
 	}
+	log.Info("servicebus: published SCRs for block", "blockHash", blockScrs.Hash, "messageCount", len(messages), "topic", sb.cfg.BlockScrsExchange.Topic)
 }
 
 func (sb *serviceBusPublisher) PublishBlockEventsWithOrder(blockTxs data.BlockEventsWithOrder) {
@@ -329,7 +386,9 @@ func (sb *serviceBusPublisher) PublishBlockEventsWithOrder(blockTxs data.BlockEv
 	err = sb.publishFanout(sb.cfg.BlockEventsExchange, messages)
 	if err != nil {
 		log.Error("failed to publish full block events to servicebus", "hash", blockTxs.Hash, "exchange", sb.cfg.BlockEventsExchange.Topic, "err", err.Error())
+		return
 	}
+	log.Info("servicebus: published full block events", "blockHash", blockTxs.Hash, "messageCount", len(messages), "topic", sb.cfg.BlockEventsExchange.Topic)
 }
 
 func (sb *serviceBusPublisher) publishFanout(exchangeConfig config.ServiceBusExchangeConfig, payload []*azservicebus.Message) error {
