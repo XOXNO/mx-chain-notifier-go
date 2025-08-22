@@ -78,7 +78,7 @@
     ConnectionType = "instance"
 
     # Time to live (in minutes) for redis lock entry
-    TTL = 30
+    TTL = 1440
 
 [RabbitMQ]
     # The url used to connect to a rabbitMQ server
