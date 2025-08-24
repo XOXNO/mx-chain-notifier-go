@@ -359,8 +359,7 @@ func (eh *eventsHandler) tryCheckProcessedWithRetry(id, blockHash string) bool {
 	var err error
 	var setSuccessful bool
 
-	prefix := getPrefixLockerKey(id)
-	key := fmt.Sprintf("block:%s:%s", prefix, blockHash)
+	key := fmt.Sprintf("block:%s:%s", id, blockHash)
 
 	// Implement timeout and retry limit to prevent infinite blocking
 	for attempt := 0; attempt < maxRedisRetries; attempt++ {
@@ -408,20 +407,6 @@ func (eh *eventsHandler) broadcastConcurrent(broadcastFunc func(Publisher)) {
 		}(publisher)
 	}
 	wg.Wait()
-}
-
-func getPrefixLockerKey(id string) string {
-	// keep this matching for backwards compatibility
-	switch id {
-	case common.PushLogsAndEvents:
-		return ""
-	case common.RevertBlockEvents:
-		return revertKeyPrefix
-	case common.FinalizedBlockEvents:
-		return finalizedKeyPrefix
-	}
-
-	return ""
 }
 
 func getRabbitOpID(operation string) string {
