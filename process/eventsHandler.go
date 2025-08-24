@@ -360,7 +360,7 @@ func (eh *eventsHandler) tryCheckProcessedWithRetry(id, blockHash string) bool {
 	var setSuccessful bool
 
 	prefix := getPrefixLockerKey(id)
-	key := prefix + blockHash
+	key := fmt.Sprintf("block:%s:%s", prefix, blockHash)
 
 	// Implement timeout and retry limit to prevent infinite blocking
 	for attempt := 0; attempt < maxRedisRetries; attempt++ {
