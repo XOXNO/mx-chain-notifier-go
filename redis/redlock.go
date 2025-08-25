@@ -73,7 +73,7 @@ func (r *redlockWrapper) IsCrossShardConfirmation(ctx context.Context, originalT
 // SetBlockTimestamp stores the timestamp for a given block hash
 func (r *redlockWrapper) SetBlockTimestamp(ctx context.Context, blockHash string, timestamp uint64) error {
 	key := fmt.Sprintf("block:timestamp:%s", blockHash)
-	timestampTTL := time.Hour * 48 // 48 hours TTL for block timestamps
+	timestampTTL := time.Hour // 1 hour TTL for block timestamps
 	return r.client.SetTimestamp(ctx, key, timestamp, timestampTTL)
 }
 
