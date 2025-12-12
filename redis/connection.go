@@ -3,7 +3,7 @@ package redis
 import (
 	"context"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 	logger "github.com/multiversx/mx-chain-logger-go"
 	"github.com/multiversx/mx-chain-notifier-go/config"
 )
@@ -16,9 +16,14 @@ func CreateSimpleClient(cfg config.RedisConfig) (RedLockClient, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if cfg.ClientName != "" {
+		opt.ClientName = cfg.ClientName
+	}
+
 	client := redis.NewClient(opt)
 
-	log.Debug("created redis instance connection type", "connection url", cfg.Url)
+	log.Debug("created redis instance connection type", "connection url", cfg.Url, "clientName", cfg.ClientName)
 
 	rc := NewRedisClientWrapper(client)
 	ok := rc.IsConnected(context.Background())
@@ -34,10 +39,11 @@ func CreateFailoverClient(cfg config.RedisConfig) (RedLockClient, error) {
 	client := redis.NewFailoverClient(&redis.FailoverOptions{
 		MasterName:    cfg.MasterName,
 		SentinelAddrs: []string{cfg.SentinelUrl},
+		ClientName:    cfg.ClientName,
 	})
 	rc := NewRedisClientWrapper(client)
 
-	log.Debug("created redis sentinel connection type", "connection url", cfg.SentinelUrl, "master", cfg.MasterName)
+	log.Debug("created redis sentinel connection type", "connection url", cfg.SentinelUrl, "master", cfg.MasterName, "clientName", cfg.ClientName)
 
 	ok := rc.IsConnected(context.Background())
 	if !ok {

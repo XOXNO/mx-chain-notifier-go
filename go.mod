@@ -9,7 +9,6 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets v1.4.0
 	github.com/gin-contrib/cors v1.7.6
 	github.com/gin-gonic/gin v1.10.1
-	github.com/go-redis/redis/v8 v8.11.5
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/multiversx/mx-chain-communication-go v1.3.0
@@ -18,6 +17,7 @@ require (
 	github.com/pelletier/go-toml v1.9.5
 	github.com/prometheus/client_model v0.6.2
 	github.com/prometheus/common v0.65.0
+	github.com/redis/go-redis/v9 v9.8.0
 	github.com/spaolacci/murmur3 v1.1.0
 	github.com/streadway/amqp v1.1.0
 	github.com/stretchr/testify v1.10.0
