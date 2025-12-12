@@ -13,7 +13,7 @@ RUN go mod tidy
 RUN go build -o notifier
 
 # ===== SECOND STAGE ======
-FROM ubuntu:24.10
+FROM ubuntu:24.04
 RUN apt-get update && apt-get install -y openssl ca-certificates
 COPY --from=builder /multiversx/cmd/notifier /multiversx
 
