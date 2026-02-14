@@ -8,7 +8,6 @@ import (
 	"github.com/multiversx/mx-chain-core-go/core"
 )
 
-
 // Configs holds all configs
 type Configs struct {
 	MainConfig      MainConfig
@@ -29,9 +28,10 @@ type MainConfig struct {
 
 // GeneralConfig maps the general config section
 type GeneralConfig struct {
-	ExternalMarshaller MarshallerConfig
-	AddressConverter   AddressConverterConfig
-	CheckDuplicates    bool
+	ExternalMarshaller   MarshallerConfig
+	AddressConverter     AddressConverterConfig
+	CheckDuplicates      bool
+	WithReadStateChanges bool
 }
 
 // MarshallerConfig maps the marshaller configuration
@@ -91,6 +91,7 @@ type RabbitMQConfig struct {
 	BlockScrsExchange       RabbitMQExchangeConfig
 	BlockEventsExchange     RabbitMQExchangeConfig
 	AlteredAccountsExchange RabbitMQExchangeConfig
+	StateAccessesExchange   RabbitMQExchangeConfig
 }
 
 // RabbitMQExchangeConfig holds the configuration for a rabbitMQ exchange

@@ -31,6 +31,7 @@ const (
 // ArgsEventsHandler defines the arguments needed for an events handler
 type ArgsEventsHandler struct {
 	Locker               LockService
+	Publisher            Publisher
 	Publishers           []Publisher
 	StatusMetricsHandler common.StatusMetricsHandler
 	EventsInterceptor    EventsInterceptor
@@ -52,9 +53,11 @@ func NewEventsHandler(args ArgsEventsHandler) (*eventsHandler, error) {
 		return nil, err
 	}
 
+	publishers := mergePublishers(args.Publisher, args.Publishers)
+
 	return &eventsHandler{
 		locker:            args.Locker,
-		publishers:        args.Publishers,
+		publishers:        publishers,
 		metricsHandler:    args.StatusMetricsHandler,
 		eventsInterceptor: args.EventsInterceptor,
 		checkDuplicates:   args.CheckDuplicates,
@@ -65,9 +68,23 @@ func checkArgs(args ArgsEventsHandler) error {
 	if check.IfNil(args.Locker) {
 		return ErrNilLockService
 	}
-	if len(args.Publishers) == 0 {
+
+	hasValidPublisher := false
+	if !check.IfNil(args.Publisher) {
+		hasValidPublisher = true
+	}
+	if !hasValidPublisher {
+		for _, publisher := range args.Publishers {
+			if !check.IfNil(publisher) {
+				hasValidPublisher = true
+				break
+			}
+		}
+	}
+	if !hasValidPublisher {
 		return ErrNilPublisherService
 	}
+
 	if check.IfNil(args.StatusMetricsHandler) {
 		return common.ErrNilStatusMetricsHandler
 	}
@@ -78,6 +95,24 @@ func checkArgs(args ArgsEventsHandler) error {
 	return nil
 }
 
+func mergePublishers(single Publisher, publishers []Publisher) []Publisher {
+	allPublishers := make([]Publisher, 0, len(publishers)+1)
+
+	if !check.IfNil(single) {
+		allPublishers = append(allPublishers, single)
+	}
+
+	for _, publisher := range publishers {
+		if check.IfNil(publisher) {
+			continue
+		}
+
+		allPublishers = append(allPublishers, publisher)
+	}
+
+	return allPublishers
+}
+
 // HandleSaveBlockEvents will handle save block events received from observer
 func (eh *eventsHandler) HandleSaveBlockEvents(allEvents data.ArgsSaveBlockData) error {
 	blockHash := hex.EncodeToString(allEvents.HeaderHash)
@@ -86,10 +121,29 @@ func (eh *eventsHandler) HandleSaveBlockEvents(allEvents data.ArgsSaveBlockData)
 		return nil
 	}
 
+	if check.IfNil(allEvents.Header) {
+		return ErrNilBlockHeader
+	}
+
+	if allEvents.Header.IsHeaderV3() {
+		return eh.handleSaveBlockEventsV3(allEvents)
+	}
+
+	return eh.handleSaveBlockEventsLegacy(allEvents, blockHash)
+}
+
+func (eh *eventsHandler) handleSaveBlockEventsLegacy(allEvents data.ArgsSaveBlockData, blockHash string) error {
 	eventsData, err := eh.eventsInterceptor.ProcessBlockEvents(&allEvents)
 	if err != nil {
 		log.Error("eventsHandler: failed to process block events", "blockHash", blockHash, "error", err)
 		return err
+	}
+
+	if check.IfNil(eventsData) {
+		return ErrNilEventsInterceptor
+	}
+	if check.IfNil(eventsData.Header) {
+		return ErrNilBlockHeader
 	}
 
 	// Store block timestamp in Redis
@@ -98,19 +152,48 @@ func (eh *eventsHandler) HandleSaveBlockEvents(allEvents data.ArgsSaveBlockData)
 		log.Warn("could not store block timestamp", "blockHash", blockHash, "error", err)
 	}
 
-	pushEvents := data.BlockEvents{
-		Hash:      eventsData.Hash,
-		ShardID:   eventsData.Header.GetShardID(),
-		TimeStamp: eventsData.Header.GetTimeStamp(),
-		Events:    eventsData.LogEvents,
+	headerTimeStamp := eventsData.Header.GetTimeStamp()
+	headerTimeStampMs := allEvents.HeaderTimeStampMs
+	shardID := eventsData.Header.GetShardID()
+	nonce := eventsData.Header.GetNonce()
+
+	return eh.handleSaveBlockEvents(
+		eventsData,
+		headerTimeStamp,
+		headerTimeStampMs,
+		shardID,
+		nonce,
+	)
+}
+
+func (eh *eventsHandler) handleSaveBlockEvents(
+	eventsData *data.InterceptorBlockData,
+	headerTimeStamp uint64,
+	headerTimeStampMs uint64,
+	shardID uint32,
+	nonce uint64,
+) error {
+	if eventsData == nil {
+		return ErrNilEventsInterceptor
 	}
-	err = eh.handlePushEvents(pushEvents)
+	if check.IfNil(eventsData.Header) {
+		return ErrNilBlockHeader
+	}
+
+	pushEvents := data.BlockEvents{
+		Hash:        eventsData.Hash,
+		ShardID:     shardID,
+		TimeStamp:   headerTimeStamp,
+		TimeStampMs: headerTimeStampMs,
+		Events:      eventsData.LogEvents,
+	}
+	err := eh.handlePushEvents(pushEvents)
 	if err != nil {
 		return err
 	}
 
 	// Log completion after dedupe gate to avoid duplicate "completed" lines with multiple observers
-	log.Info("eventsHandler: save block processed", "blockHash", blockHash, "events", len(eventsData.LogEvents), "txs", len(eventsData.Txs), "scrs", len(eventsData.Scrs), "alteredAccounts", len(eventsData.AlteredAccounts))
+	log.Info("eventsHandler: save block processed", "blockHash", eventsData.Hash, "events", len(eventsData.LogEvents), "txs", len(eventsData.Txs), "scrs", len(eventsData.Scrs), "alteredAccounts", len(eventsData.AlteredAccounts))
 
 	txs := data.BlockTxs{
 		Hash: eventsData.Hash,
@@ -132,15 +215,51 @@ func (eh *eventsHandler) HandleSaveBlockEvents(allEvents data.ArgsSaveBlockData)
 	}
 
 	txsWithOrder := data.BlockEventsWithOrder{
-		Hash:      eventsData.Hash,
-		ShardID:   eventsData.Header.GetShardID(),
-		TimeStamp: eventsData.Header.GetTimeStamp(),
-		Txs:       eventsData.TxsWithOrder,
-		Scrs:      eventsData.ScrsWithOrder,
-		Events:    eventsData.LogEvents,
+		Hash:        eventsData.Hash,
+		ShardID:     shardID,
+		TimeStamp:   headerTimeStamp,
+		TimeStampMs: headerTimeStampMs,
+		Txs:         eventsData.TxsWithOrder,
+		Scrs:        eventsData.ScrsWithOrder,
+		Events:      eventsData.LogEvents,
 	}
 	eh.handleBlockEventsWithOrder(txsWithOrder)
 	eh.handleAlteredAccounts(alteredEvent)
+
+	stateAccesses := data.BlockStateAccesses{
+		Hash:                     eventsData.Hash,
+		ShardID:                  shardID,
+		TimeStampMs:              headerTimeStampMs,
+		Nonce:                    nonce,
+		StateAccessesPerAccounts: eventsData.StateAccessesPerAccounts,
+	}
+	eh.handleStateAccesses(stateAccesses)
+
+	return nil
+}
+
+func (eh *eventsHandler) handleSaveBlockEventsV3(allEvents data.ArgsSaveBlockData) error {
+	executionResultsData, err := eh.eventsInterceptor.ProcessBlockEventsV3(&allEvents)
+	if err != nil {
+		return err
+	}
+
+	shardID := allEvents.Header.GetShardID()
+
+	for _, executionResultData := range executionResultsData {
+		timeStampSec := common.ConvertTimeStampMsToSec(executionResultData.TimeStampMs) // this is used for backwards compatibility
+		err = eh.handleSaveBlockEvents(
+			executionResultData,
+			timeStampSec,
+			executionResultData.TimeStampMs,
+			shardID,
+			executionResultData.Nonce,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -154,14 +273,10 @@ func (eh *eventsHandler) handlePushEvents(events data.BlockEvents) error {
 	}
 
 	if len(events.Events) == 0 {
-		// log.Warn("received empty events", "event", common.PushLogsAndEvents,
-		// 	"block hash", events.Hash,
-		// )
+		log.Debug("received empty events", "event", common.PushLogsAndEvents,
+			"block hash", events.Hash,
+		)
 		events.Events = make([]data.Event, 0)
-	} else {
-		// log.Info("received", "event", common.PushLogsAndEvents,
-		// 	"block hash", events.Hash,
-		// )
 	}
 
 	t := time.Now()
@@ -190,7 +305,7 @@ func (eh *eventsHandler) shouldProcessSaveBlockEvents(blockHash string) bool {
 	return true
 }
 
-// HandleRevertEvents will handle revents events received from observer
+// HandleRevertEvents will handle reverts events received from observer
 func (eh *eventsHandler) HandleRevertEvents(revertBlock data.RevertBlock) {
 	if revertBlock.Hash == "" {
 		log.Warn("received empty hash", "event", common.RevertBlockEvents,
@@ -205,20 +320,10 @@ func (eh *eventsHandler) HandleRevertEvents(revertBlock data.RevertBlock) {
 	}
 
 	if !shouldProcessRevert {
-		// log.Info("received duplicated events", "event", common.RevertBlockEvents,
-		// 	"block hash", revertBlock.Hash,
-		// 	"will process", false,
-		// )
 		return
 	}
 
-	// log.Info("received", "event", common.RevertBlockEvents,
-	// 	"block hash", revertBlock.Hash,
-	// 	"will process", shouldProcessRevert,
-	// )
-
 	t := time.Now()
-
 	eh.broadcastConcurrent(func(publisher Publisher) {
 		publisher.BroadcastRevert(revertBlock)
 	})
@@ -239,20 +344,10 @@ func (eh *eventsHandler) HandleFinalizedEvents(finalizedBlock data.FinalizedBloc
 	}
 
 	if !shouldProcessFinalized {
-		// log.Info("received duplicated events", "event", common.FinalizedBlockEvents,
-		// 	"block hash", finalizedBlock.Hash,
-		// 	"will process", false,
-		// )
 		return
 	}
 
-	// log.Info("received", "event", common.FinalizedBlockEvents,
-	// 	"block hash", finalizedBlock.Hash,
-	// 	"will process", shouldProcessFinalized,
-	// )
-
 	t := time.Now()
-
 	eh.broadcastConcurrent(func(publisher Publisher) {
 		publisher.BroadcastFinalized(finalizedBlock)
 	})
@@ -269,17 +364,12 @@ func (eh *eventsHandler) handleBlockTxs(blockTxs data.BlockTxs) {
 	}
 
 	if len(blockTxs.Txs) == 0 {
-		// log.Warn("received empty events", "event", common.BlockTxs,
-		// 	"block hash", blockTxs.Hash,
-		// )
-	} else {
-		// log.Info("received", "event", common.BlockTxs,
-		// 	"block hash", blockTxs.Hash,
-		// )
+		log.Debug("received empty events", "event", common.BlockTxs,
+			"block hash", blockTxs.Hash,
+		)
 	}
 
 	t := time.Now()
-
 	eh.broadcastConcurrent(func(publisher Publisher) {
 		publisher.BroadcastTxs(blockTxs)
 	})
@@ -296,17 +386,12 @@ func (eh *eventsHandler) handleBlockScrs(blockScrs data.BlockScrs) {
 	}
 
 	if len(blockScrs.Scrs) == 0 {
-		// log.Warn("received empty events", "event", common.BlockScrs,
-		// 	"block hash", blockScrs.Hash,
-		// )
-	} else {
-		// log.Info("received", "event", common.BlockScrs,
-		// 	"block hash", blockScrs.Hash,
-		// )
+		log.Debug("received empty events", "event", common.BlockScrs,
+			"block hash", blockScrs.Hash,
+		)
 	}
 
 	t := time.Now()
-
 	eh.broadcastConcurrent(func(publisher Publisher) {
 		publisher.BroadcastScrs(blockScrs)
 	})
@@ -322,37 +407,39 @@ func (eh *eventsHandler) handleBlockEventsWithOrder(blockTxs data.BlockEventsWit
 		return
 	}
 
-	// log.Info("received", "event", common.BlockEvents,
-	// 	"block hash", blockTxs.Hash,
-	// )
-
 	t := time.Now()
-
 	eh.broadcastConcurrent(func(publisher Publisher) {
 		publisher.BroadcastBlockEventsWithOrder(blockTxs)
 	})
 	eh.metricsHandler.AddRequest(getRabbitOpID(common.BlockEvents), time.Since(t))
 }
 
-// handleBlockEventsWithOrder will handle full block events received from observer
+// handleAlteredAccounts will handle altered accounts events received from observer
 func (eh *eventsHandler) handleAlteredAccounts(alteredAccountsEvent data.AlteredAccountsEvent) {
 	if len(alteredAccountsEvent.Accounts) == 0 {
-		// log.Warn("received empty accounts", "event", common.AlteredAccountsEvent,
-		// 	"will process", false,
-		// )
 		return
 	}
 
-	// log.Info("received", "event", common.AlteredAccountsEvent,
-	// 	"block hash", alteredAccountsEvent.Hash,
-	// )
-
 	t := time.Now()
-
 	eh.broadcastConcurrent(func(publisher Publisher) {
 		publisher.BroadcastAlteredAccounts(alteredAccountsEvent)
 	})
 	eh.metricsHandler.AddRequest(getRabbitOpID(common.AlteredAccountsEvent), time.Since(t))
+}
+
+func (eh *eventsHandler) handleStateAccesses(stateAccesses data.BlockStateAccesses) {
+	if stateAccesses.Hash == "" {
+		log.Warn("received empty state accesses",
+			"will process", false,
+		)
+		return
+	}
+
+	t := time.Now()
+	eh.broadcastConcurrent(func(publisher Publisher) {
+		publisher.BroadcastStateAccesses(stateAccesses)
+	})
+	eh.metricsHandler.AddRequest(getRabbitOpID(common.BlockStateAccesses), time.Since(t))
 }
 
 func (eh *eventsHandler) tryCheckProcessedWithRetry(id, blockHash string) bool {
@@ -361,15 +448,13 @@ func (eh *eventsHandler) tryCheckProcessedWithRetry(id, blockHash string) bool {
 
 	key := fmt.Sprintf("block:%s:%s", id, blockHash)
 
-	// Implement timeout and retry limit to prevent infinite blocking
 	for attempt := 0; attempt < maxRedisRetries; attempt++ {
-		// Create context with timeout for each Redis operation
 		ctx, cancel := context.WithTimeout(context.Background(), redisOperationTimeout)
 
 		t := time.Now()
 		setSuccessful, err = eh.locker.IsEventProcessed(ctx, key)
 		eh.metricsHandler.AddRequest(getRedisOpID(id), time.Since(t))
-		cancel() // Always cancel context to prevent resource leaks
+		cancel()
 
 		if err == nil {
 			log.Debug("locker", "event", id, "block hash", blockHash, "succeeded", setSuccessful, "attempt", attempt+1)
@@ -378,7 +463,6 @@ func (eh *eventsHandler) tryCheckProcessedWithRetry(id, blockHash string) bool {
 
 		log.Error("failed to check event in locker", "error", err.Error(), "attempt", attempt+1, "maxRetries", maxRedisRetries)
 
-		// Stop retrying if we've reached the maximum attempts
 		if attempt >= maxRedisRetries-1 {
 			break
 		}
@@ -391,7 +475,6 @@ func (eh *eventsHandler) tryCheckProcessedWithRetry(id, blockHash string) bool {
 		}
 	}
 
-	// If all retries failed, log error and return false (assume not processed to be safe)
 	log.Error("exhausted all Redis retry attempts", "event", id, "blockHash", blockHash, "maxRetries", maxRedisRetries)
 	return false
 }

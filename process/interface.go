@@ -27,6 +27,7 @@ type Publisher interface {
 	BroadcastBlockEventsWithOrder(event data.BlockEventsWithOrder)
 	BroadcastAlteredAccounts(accounts data.AlteredAccountsEvent)
 	BroadcastScrs(event data.BlockScrs)
+	BroadcastStateAccesses(events data.BlockStateAccesses)
 	Close() error
 	IsInterfaceNil() bool
 }
@@ -42,6 +43,7 @@ type EventsHandler interface {
 // EventsInterceptor defines the behaviour of an events interceptor component
 type EventsInterceptor interface {
 	ProcessBlockEvents(eventsData *data.ArgsSaveBlockData) (*data.InterceptorBlockData, error)
+	ProcessBlockEventsV3(eventsData *data.ArgsSaveBlockData) ([]*data.InterceptorBlockData, error)
 	IsInterfaceNil() bool
 }
 
@@ -75,6 +77,7 @@ type PublisherHandler interface {
 	PublishScrs(blockScrs data.BlockScrs)
 	PublishBlockEventsWithOrder(blockTxs data.BlockEventsWithOrder)
 	PublishAlteredAccounts(accounts data.AlteredAccountsEvent)
+	PublishStateAccesses(stateAccesses data.BlockStateAccesses)
 	Close() error
 	IsInterfaceNil() bool
 }

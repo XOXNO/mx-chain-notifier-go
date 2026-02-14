@@ -1,6 +1,8 @@
 package rabbitmq
 
 import (
+	"fmt"
+
 	"github.com/multiversx/mx-chain-core-go/core/check"
 	"github.com/multiversx/mx-chain-core-go/marshal"
 	logger "github.com/multiversx/mx-chain-logger-go"
@@ -59,40 +61,52 @@ func checkArgs(args ArgsRabbitMqPublisher) error {
 	}
 
 	if args.Config.EventsExchange.Name == "" {
-		return ErrInvalidRabbitMqExchangeName
+		return fmt.Errorf("%w for EventsExchange", ErrInvalidRabbitMqExchangeName)
 	}
 	if args.Config.EventsExchange.Type == "" {
-		return ErrInvalidRabbitMqExchangeType
+		return fmt.Errorf("%w for EventsExchange", ErrInvalidRabbitMqExchangeType)
 	}
 	if args.Config.RevertEventsExchange.Name == "" {
-		return ErrInvalidRabbitMqExchangeName
+		return fmt.Errorf("%w for RevertEventsExchange", ErrInvalidRabbitMqExchangeName)
 	}
 	if args.Config.RevertEventsExchange.Type == "" {
-		return ErrInvalidRabbitMqExchangeType
+		return fmt.Errorf("%w for RevertEventsExchange", ErrInvalidRabbitMqExchangeType)
 	}
 	if args.Config.FinalizedEventsExchange.Name == "" {
-		return ErrInvalidRabbitMqExchangeName
+		return fmt.Errorf("%w for FinalizedEventsExchange", ErrInvalidRabbitMqExchangeName)
 	}
 	if args.Config.FinalizedEventsExchange.Type == "" {
-		return ErrInvalidRabbitMqExchangeType
+		return fmt.Errorf("%w for FinalizedEventsExchange", ErrInvalidRabbitMqExchangeType)
 	}
 	if args.Config.BlockTxsExchange.Name == "" {
-		return ErrInvalidRabbitMqExchangeName
+		return fmt.Errorf("%w for BlockTxsExchange", ErrInvalidRabbitMqExchangeName)
 	}
 	if args.Config.BlockTxsExchange.Type == "" {
-		return ErrInvalidRabbitMqExchangeType
+		return fmt.Errorf("%w for BlockTxsExchange", ErrInvalidRabbitMqExchangeType)
 	}
 	if args.Config.BlockScrsExchange.Name == "" {
-		return ErrInvalidRabbitMqExchangeName
+		return fmt.Errorf("%w for BlockScrsExchange", ErrInvalidRabbitMqExchangeName)
 	}
 	if args.Config.BlockScrsExchange.Type == "" {
-		return ErrInvalidRabbitMqExchangeType
+		return fmt.Errorf("%w for BlockScrsExchange", ErrInvalidRabbitMqExchangeType)
 	}
 	if args.Config.BlockEventsExchange.Name == "" {
-		return ErrInvalidRabbitMqExchangeName
+		return fmt.Errorf("%w for BlockEventsExchange", ErrInvalidRabbitMqExchangeName)
 	}
 	if args.Config.BlockEventsExchange.Type == "" {
-		return ErrInvalidRabbitMqExchangeType
+		return fmt.Errorf("%w for BlockEventsExchange", ErrInvalidRabbitMqExchangeType)
+	}
+	if args.Config.StateAccessesExchange.Name == "" {
+		return fmt.Errorf("%w for StateAccessesExchange", ErrInvalidRabbitMqExchangeName)
+	}
+	if args.Config.StateAccessesExchange.Type == "" {
+		return fmt.Errorf("%w for StateAccessesExchange", ErrInvalidRabbitMqExchangeType)
+	}
+	if args.Config.AlteredAccountsExchange.Name == "" && args.Config.AlteredAccountsExchange.Type != "" {
+		return fmt.Errorf("%w for AlteredAccountsExchange", ErrInvalidRabbitMqExchangeName)
+	}
+	if args.Config.AlteredAccountsExchange.Name != "" && args.Config.AlteredAccountsExchange.Type == "" {
+		return fmt.Errorf("%w for AlteredAccountsExchange", ErrInvalidRabbitMqExchangeType)
 	}
 
 	return nil
@@ -123,6 +137,16 @@ func (rp *rabbitMqPublisher) createExchanges() error {
 	err = rp.createExchange(rp.cfg.BlockEventsExchange)
 	if err != nil {
 		return err
+	}
+	err = rp.createExchange(rp.cfg.StateAccessesExchange)
+	if err != nil {
+		return err
+	}
+	if rp.cfg.AlteredAccountsExchange.Name != "" && rp.cfg.AlteredAccountsExchange.Type != "" {
+		err = rp.createExchange(rp.cfg.AlteredAccountsExchange)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -225,6 +249,10 @@ func (rp *rabbitMqPublisher) PublishBlockEventsWithOrder(blockTxs data.BlockEven
 
 // PublishAlteredAccounts will publish altered accounts events to rabbitmq
 func (rp *rabbitMqPublisher) PublishAlteredAccounts(accounts data.AlteredAccountsEvent) {
+	if rp.cfg.AlteredAccountsExchange.Name == "" {
+		return
+	}
+
 	accountsBytes, err := rp.marshaller.Marshal(accounts)
 	if err != nil {
 		log.Error("could not marshal accounts altered event", "err", err.Error())
@@ -234,6 +262,20 @@ func (rp *rabbitMqPublisher) PublishAlteredAccounts(accounts data.AlteredAccount
 	err = rp.publishFanout(rp.cfg.AlteredAccountsExchange.Name, accountsBytes)
 	if err != nil {
 		log.Error("failed to publish full accounts altered events to rabbitMQ", "err", err.Error())
+	}
+}
+
+// PublishStateAccesses will publish block state accesses to rabbitmq
+func (rp *rabbitMqPublisher) PublishStateAccesses(stateAccesses data.BlockStateAccesses) {
+	stateAccessesBytes, err := rp.marshaller.Marshal(stateAccesses)
+	if err != nil {
+		log.Error("could not marshal block state accesses", "err", err.Error())
+		return
+	}
+
+	err = rp.publishFanout(rp.cfg.StateAccessesExchange.Name, stateAccessesBytes)
+	if err != nil {
+		log.Error("failed to publish block state accesses to rabbitMQ", "err", err.Error())
 	}
 }
 

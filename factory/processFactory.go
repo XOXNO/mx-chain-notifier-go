@@ -24,8 +24,9 @@ func CreateEventsInterceptor(cfg config.GeneralConfig, locker process.LockServic
 	}
 
 	argsEventsInterceptor := process.ArgsEventsInterceptor{
-		PubKeyConverter: pubKeyConverter,
-		LockService:     locker,
+		PubKeyConverter:      pubKeyConverter,
+		WithReadStateChanges: cfg.WithReadStateChanges,
+		LockService:          locker,
 	}
 
 	return process.NewEventsInterceptor(argsEventsInterceptor)

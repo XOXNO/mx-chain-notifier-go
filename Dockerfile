@@ -1,5 +1,7 @@
 FROM golang:1.23.6 AS builder
 
+MAINTAINER MultiversX
+
 WORKDIR /multiversx
 
 COPY go.mod go.sum ./

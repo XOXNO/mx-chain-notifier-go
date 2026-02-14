@@ -39,6 +39,9 @@ const (
 	BlockScrs string = "block_scrs"
 
 	AlteredAccountsEvent string = "mvx_altered_accounts"
+
+	// BlockStateAccesses defines the subscription event type for block state accesses
+	BlockStateAccesses string = "block_state_accesses"
 )
 
 const (

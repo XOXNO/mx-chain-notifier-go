@@ -37,6 +37,10 @@ func (h *Hub) PublishBlockEventsWithOrder(blockTxs data.BlockEventsWithOrder) {
 func (h *Hub) PublishAlteredAccounts(accounts data.AlteredAccountsEvent) {
 }
 
+// PublishStateAccesses does nothing
+func (h *Hub) PublishStateAccesses(blockTxs data.BlockStateAccesses) {
+}
+
 // RegisterEvent does nothing
 func (h *Hub) RegisterEvent(_ dispatcher.EventDispatcher) {
 }

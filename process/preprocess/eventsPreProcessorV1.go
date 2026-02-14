@@ -57,10 +57,17 @@ func (d *eventsPreProcessorV1) SaveBlock(marshalledData []byte) error {
 		return err
 	}
 
-	header, err := d.getHeaderFromBytes(core.HeaderType(outportBlock.BlockData.HeaderType), outportBlock.BlockData.HeaderBytes)
+	headerType := core.HeaderType(outportBlock.BlockData.HeaderType)
+
+	header, err := d.getHeaderFromBytes(headerType, outportBlock.BlockData.HeaderBytes)
 	if err != nil {
 		preprocessorLog.Error("eventsPreProcessorV1: failed to parse SaveBlock header", "blockHash", blockHash, "error", err)
 		return err
+	}
+
+	var executionResults map[string]*outport.ExecutionResultData
+	if header.IsHeaderV3() {
+		executionResults = outportBlock.BlockData.Results
 	}
 
 	saveBlockData := &data.ArgsSaveBlockData{
@@ -73,6 +80,9 @@ func (d *eventsPreProcessorV1) SaveBlock(marshalledData []byte) error {
 		NumberOfShards:         outportBlock.NumberOfShards,
 		TransactionsPool:       outportBlock.TransactionPool,
 		Header:                 header,
+		HeaderTimeStampMs:      outportBlock.BlockData.GetTimestampMs(),
+		StateAccesses:          outportBlock.GetStateAccessesForBlock(),
+		Results:                executionResults,
 	}
 
 	err = d.facade.HandlePushEvents(*saveBlockData)
@@ -87,9 +97,6 @@ func (d *eventsPreProcessorV1) SaveBlock(marshalledData []byte) error {
 func checkBlockDataValid(block *outport.OutportBlock) error {
 	if block.BlockData == nil {
 		return ErrNilBlockData
-	}
-	if block.TransactionPool == nil {
-		return ErrNilTransactionPool
 	}
 	if block.HeaderGasConsumption == nil {
 		return ErrNilHeaderGasConsumption
@@ -111,13 +118,17 @@ func (d *eventsPreProcessorV1) RevertIndexedBlock(marshalledData []byte) error {
 		return err
 	}
 
+	headerTimeStamp := header.GetTimeStamp()
+	headerTimeStampMs := blockData.GetTimestampMs()
+
 	revertData := &data.RevertBlock{
-		Hash:      hex.EncodeToString(blockData.GetHeaderHash()),
-		Nonce:     header.GetNonce(),
-		Round:     header.GetRound(),
-		Epoch:     header.GetEpoch(),
-		ShardID:   blockData.GetShardID(),
-		TimeStamp: header.GetTimeStamp(),
+		Hash:        hex.EncodeToString(blockData.GetHeaderHash()),
+		Nonce:       header.GetNonce(),
+		Round:       header.GetRound(),
+		Epoch:       header.GetEpoch(),
+		ShardID:     blockData.GetShardID(),
+		TimeStamp:   headerTimeStamp,
+		TimeStampMs: headerTimeStampMs,
 	}
 
 	d.facade.HandleRevertEvents(*revertData)

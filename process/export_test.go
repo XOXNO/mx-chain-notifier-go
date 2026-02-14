@@ -1,8 +1,11 @@
 package process
 
 import (
-	"github.com/multiversx/mx-chain-core-go/data/outport"
+	"encoding/hex"
+
 	"github.com/multiversx/mx-chain-core-go/data/smartContractResult"
+	"github.com/multiversx/mx-chain-core-go/data/stateChange"
+	"github.com/multiversx/mx-chain-core-go/data/transaction"
 	"github.com/multiversx/mx-chain-notifier-go/data"
 )
 
@@ -37,6 +40,16 @@ func (eh *eventsHandler) ShouldProcessSaveBlockEvents(blockHash string) bool {
 }
 
 // GetLogEventsFromTransactionsPool exports internal method for testing
-func (ei *eventsInterceptor) GetLogEventsFromTransactionsPool(logs []*outport.LogData, scrs map[string]*smartContractResult.SmartContractResult) []data.Event {
+func (ei *eventsInterceptor) GetLogEventsFromTransactionsPool(logs []*transaction.LogData, scrs map[string]*smartContractResult.SmartContractResult) []data.Event {
 	return ei.getLogEventsFromTransactionsPool(logs, scrs)
+}
+
+// GetStateAccessesPerAccounts -
+func (ei *eventsInterceptor) GetStateAccessesPerAccounts(eventsData *data.ArgsSaveBlockData) map[string]*stateChange.StateAccesses {
+	return ei.getStateAccessesPerAccounts(eventsData, hex.EncodeToString(eventsData.HeaderHash), eventsData.TransactionsPool)
+}
+
+// BaseNilEventsDataCheks -
+func BaseNilEventsDataCheks(eventsData *data.ArgsSaveBlockData) error {
+	return baseNilEventsDataChecks(eventsData)
 }

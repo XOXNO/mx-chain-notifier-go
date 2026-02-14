@@ -221,6 +221,26 @@ func (wd *websocketDispatcher) AlteredAccounts(event data.AlteredAccountsEvent) 
 	wd.send <- wsEventBytes
 }
 
+// StateAccessesEvent receives a block state accesses event and process it before pushing to socket
+func (wd *websocketDispatcher) StateAccessesEvent(event data.BlockStateAccesses) {
+	eventBytes, err := wd.marshaller.Marshal(event)
+	if err != nil {
+		log.Error("failure marshalling events", "err", err.Error())
+		return
+	}
+	wsEvent := &data.WebSocketEvent{
+		Type: common.BlockStateAccesses,
+		Data: eventBytes,
+	}
+	wsEventBytes, err := wd.marshaller.Marshal(wsEvent)
+	if err != nil {
+		log.Error("failure marshalling events", "err", err.Error())
+		return
+	}
+
+	wd.send <- wsEventBytes
+}
+
 // writePump listens on the send-channel and pushes data on the socket stream
 func (wd *websocketDispatcher) writePump() {
 	ticker := time.NewTicker(pingPeriod)

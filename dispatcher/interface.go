@@ -20,6 +20,7 @@ type EventDispatcher interface {
 	BlockEvents(event data.BlockEventsWithOrder)
 	AlteredAccounts(event data.AlteredAccountsEvent)
 	ScrsEvent(event data.BlockScrs)
+	StateAccessesEvent(event data.BlockStateAccesses)
 }
 
 // Hub defines the behaviour of a component which should be able to receive events

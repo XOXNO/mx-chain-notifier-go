@@ -97,6 +97,10 @@ func (ch *commonHub) handlePushBlockEvents(blockEvents data.BlockEvents, subscri
 // PublishRevert will publish revert event to dispatcher
 func (ch *commonHub) PublishRevert(revertBlock data.RevertBlock) {
 	subscriptions := ch.subscriptionMapper.Subscriptions()
+	_, ok := subscriptions[common.RevertBlockEvents]
+	if !ok {
+		return
+	}
 
 	dispatchersMap := make(map[uuid.UUID]data.RevertBlock)
 
@@ -116,6 +120,10 @@ func (ch *commonHub) PublishRevert(revertBlock data.RevertBlock) {
 // PublishFinalized will publish finalized event to dispatcher
 func (ch *commonHub) PublishFinalized(finalizedBlock data.FinalizedBlock) {
 	subscriptions := ch.subscriptionMapper.Subscriptions()
+	_, ok := subscriptions[common.FinalizedBlockEvents]
+	if !ok {
+		return
+	}
 
 	dispatchersMap := make(map[uuid.UUID]data.FinalizedBlock)
 
@@ -135,6 +143,10 @@ func (ch *commonHub) PublishFinalized(finalizedBlock data.FinalizedBlock) {
 // PublishTxs will publish txs event to dispatcher
 func (ch *commonHub) PublishTxs(blockTxs data.BlockTxs) {
 	subscriptions := ch.subscriptionMapper.Subscriptions()
+	_, ok := subscriptions[common.BlockTxs]
+	if !ok {
+		return
+	}
 
 	dispatchersMap := make(map[uuid.UUID]data.BlockTxs)
 
@@ -154,6 +166,10 @@ func (ch *commonHub) PublishTxs(blockTxs data.BlockTxs) {
 // PublishBlockEventsWithOrder will publish block events with order to dispatcher
 func (ch *commonHub) PublishBlockEventsWithOrder(blockTxs data.BlockEventsWithOrder) {
 	subscriptions := ch.subscriptionMapper.Subscriptions()
+	_, ok := subscriptions[common.BlockEvents]
+	if !ok {
+		return
+	}
 
 	dispatchersMap := make(map[uuid.UUID]data.BlockEventsWithOrder)
 
@@ -173,6 +189,10 @@ func (ch *commonHub) PublishBlockEventsWithOrder(blockTxs data.BlockEventsWithOr
 // PublishScrs will publish scrs events to dispatcher
 func (ch *commonHub) PublishScrs(blockScrs data.BlockScrs) {
 	subscriptions := ch.subscriptionMapper.Subscriptions()
+	_, ok := subscriptions[common.BlockScrs]
+	if !ok {
+		return
+	}
 
 	dispatchersMap := make(map[uuid.UUID]data.BlockScrs)
 
@@ -192,6 +212,10 @@ func (ch *commonHub) PublishScrs(blockScrs data.BlockScrs) {
 // PublishAlteredAccounts will publish altered accounts to dispatcher
 func (ch *commonHub) PublishAlteredAccounts(accounts data.AlteredAccountsEvent) {
 	subscriptions := ch.subscriptionMapper.Subscriptions()
+	_, ok := subscriptions[common.AlteredAccountsEvent]
+	if !ok {
+		return
+	}
 
 	dispatchersMap := make(map[uuid.UUID]data.AlteredAccountsEvent)
 
@@ -204,6 +228,29 @@ func (ch *commonHub) PublishAlteredAccounts(accounts data.AlteredAccountsEvent) 
 	for id, event := range dispatchersMap {
 		if d, ok := ch.dispatchers[id]; ok {
 			d.AlteredAccounts(event)
+		}
+	}
+}
+
+// PublishStateAccesses will publish state accesses to dispatcher
+func (ch *commonHub) PublishStateAccesses(stateAccesses data.BlockStateAccesses) {
+	subscriptions := ch.subscriptionMapper.Subscriptions()
+	_, ok := subscriptions[common.BlockStateAccesses]
+	if !ok {
+		return
+	}
+
+	dispatchersMap := make(map[uuid.UUID]data.BlockStateAccesses)
+
+	for _, subscription := range subscriptions[common.BlockStateAccesses] {
+		dispatchersMap[subscription.DispatcherID] = stateAccesses
+	}
+
+	ch.mutDispatchers.RLock()
+	defer ch.mutDispatchers.RUnlock()
+	for id, event := range dispatchersMap {
+		if d, ok := ch.dispatchers[id]; ok {
+			d.StateAccessesEvent(event)
 		}
 	}
 }
