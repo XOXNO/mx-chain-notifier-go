@@ -1,6 +1,6 @@
 FROM golang:1.23.6 AS builder
 
-MAINTAINER MultiversX
+LABEL maintainer="MultiversX"
 
 WORKDIR /multiversx
 

@@ -100,6 +100,9 @@ func checkArgs(args ArgsServiceBusPublisher) error {
 	if args.Config.BlockEventsExchange.Topic == "" {
 		return ErrInvalidServiceBusExchangeName
 	}
+	if args.Config.StateAccessesExchange.Topic == "" {
+		return ErrInvalidServiceBusExchangeName
+	}
 
 	return nil
 }
@@ -348,6 +351,37 @@ func (sb *serviceBusPublisher) PublishAlteredAccounts(accounts data.AlteredAccou
 		return
 	}
 	log.Debug("servicebus: published altered accounts for block", "blockHash", accounts.Hash, "messageCount", len(messages), "topic", sb.cfg.AlteredAccountsExchange.Topic)
+}
+
+// PublishStateAccesses publishes block state accesses to Azure Service Bus
+func (sb *serviceBusPublisher) PublishStateAccesses(stateAccesses data.BlockStateAccesses) {
+	stateAccessesBytes, err := sb.marshaller.Marshal(stateAccesses)
+	if err != nil {
+		log.Error("failed to marshal block state accesses", "hash", stateAccesses.Hash, "err", err.Error())
+		return
+	}
+
+	messages := make([]*azservicebus.Message, 0, 1)
+	msg := &azservicebus.Message{
+		Body:                  stateAccessesBytes,
+		SessionID:             &stateAccesses.Hash,
+		ApplicationProperties: make(map[string]interface{}),
+	}
+	bh := stateAccesses.Hash
+	msg.CorrelationID = &bh
+	msg.ApplicationProperties["Hash"] = stateAccesses.Hash
+	msg.ApplicationProperties["ShardID"] = stateAccesses.ShardID
+	msg.ApplicationProperties["Nonce"] = stateAccesses.Nonce
+	msg.ApplicationProperties["StateAccessesPerAccounts"] = len(stateAccesses.StateAccessesPerAccounts)
+	messages = append(messages, msg)
+
+	err = sb.publishFanout(sb.cfg.StateAccessesExchange, messages)
+	if err != nil {
+		log.Error("failed to publish state accesses event to servicebus", "hash", stateAccesses.Hash, "exchange", sb.cfg.StateAccessesExchange.Topic, "err", err.Error())
+		return
+	}
+
+	log.Debug("servicebus: published state accesses for block", "blockHash", stateAccesses.Hash, "messageCount", len(messages), "topic", sb.cfg.StateAccessesExchange.Topic)
 }
 
 func (sb *serviceBusPublisher) PublishScrs(blockScrs data.BlockScrs) {

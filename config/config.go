@@ -152,6 +152,7 @@ type AzureServiceBusConfig struct {
 	BlockScrsExchange          ServiceBusExchangeConfig
 	BlockEventsExchange        ServiceBusExchangeConfig
 	AlteredAccountsExchange    ServiceBusExchangeConfig
+	StateAccessesExchange      ServiceBusExchangeConfig
 }
 
 // LoadMainConfig returns a MainConfig instance by reading the provided toml file

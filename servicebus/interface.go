@@ -18,6 +18,7 @@ type ServiceBusClient interface {
 type PublisherService interface {
 	Run() error
 	BroadcastAlteredAccounts(accounts data.AlteredAccountsEvent)
+	BroadcastStateAccesses(event data.BlockStateAccesses)
 	Broadcast(events data.BlockEvents)
 	BroadcastRevert(event data.RevertBlock)
 	BroadcastFinalized(event data.FinalizedBlock)

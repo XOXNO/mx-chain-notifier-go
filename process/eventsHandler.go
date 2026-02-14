@@ -139,7 +139,7 @@ func (eh *eventsHandler) handleSaveBlockEventsLegacy(allEvents data.ArgsSaveBloc
 		return err
 	}
 
-	if check.IfNil(eventsData) {
+	if eventsData == nil {
 		return ErrNilEventsInterceptor
 	}
 	if check.IfNil(eventsData.Header) {
