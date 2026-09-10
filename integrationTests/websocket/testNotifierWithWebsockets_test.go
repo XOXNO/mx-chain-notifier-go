@@ -52,8 +52,10 @@ func TestNotifierWithWebsockets_PushEvents(t *testing.T) {
 		{
 			Address: hex.EncodeToString(addr),
 			TxHash:  "txHash1",
-			Data:    make([]byte, 0),
-			Topics:  make([][]byte, 0),
+			// non-SCR txs carry their own hash as the original tx hash
+			OriginalTxHash: "txHash1",
+			Data:           make([]byte, 0),
+			Topics:         make([][]byte, 0),
 		},
 	}
 
@@ -160,8 +162,10 @@ func TestNotifierWithWebsockets_PushEventsV3(t *testing.T) {
 		{
 			Address: hex.EncodeToString(addr),
 			TxHash:  "txHash1",
-			Data:    make([]byte, 0),
-			Topics:  make([][]byte, 0),
+			// non-SCR txs carry their own hash as the original tx hash
+			OriginalTxHash: "txHash1",
+			Data:           make([]byte, 0),
+			Topics:         make([][]byte, 0),
 		},
 	}
 
@@ -221,8 +225,10 @@ func TestNotifierWithWebsockets_BlockEvents(t *testing.T) {
 		{
 			Address: hex.EncodeToString(addr),
 			TxHash:  "txHash1",
-			Data:    make([]byte, 0),
-			Topics:  make([][]byte, 0),
+			// non-SCR txs carry their own hash as the original tx hash
+			OriginalTxHash: "txHash1",
+			Data:           make([]byte, 0),
+			Topics:         make([][]byte, 0),
 		},
 	}
 	expBlockEvents := &data.BlockEventsWithOrder{

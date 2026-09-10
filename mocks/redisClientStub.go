@@ -7,12 +7,13 @@ import (
 
 // RedisClientStub -
 type RedisClientStub struct {
-	SetEntryCalled      func(key string, value bool, ttl time.Duration) (bool, error)
+	SetEntryCalled       func(key string, value bool, ttl time.Duration) (bool, error)
+	DeleteEntryCalled    func(key string) error
 	AddEventToListCalled func(key string, value string, ttl time.Duration) (int64, error)
-	HasEventCalled      func(key string, value string) (bool, error)
-	SetTimestampCalled  func(key string, timestamp uint64, ttl time.Duration) error
-	PingCalled          func() (string, error)
-	IsConnectedCalled   func() bool
+	HasEventCalled       func(key string, value string) (bool, error)
+	SetTimestampCalled   func(key string, timestamp uint64, ttl time.Duration) error
+	PingCalled           func() (string, error)
+	IsConnectedCalled    func() bool
 }
 
 // SetEntry -
@@ -22,6 +23,15 @@ func (rc *RedisClientStub) SetEntry(_ context.Context, key string, value bool, t
 	}
 
 	return false, nil
+}
+
+// DeleteEntry -
+func (rc *RedisClientStub) DeleteEntry(_ context.Context, key string) error {
+	if rc.DeleteEntryCalled != nil {
+		return rc.DeleteEntryCalled(key)
+	}
+
+	return nil
 }
 
 // Ping -

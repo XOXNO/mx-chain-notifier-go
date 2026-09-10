@@ -3,6 +3,7 @@ package process
 import (
 	"encoding/hex"
 
+	"github.com/multiversx/mx-chain-core-go/data/outport"
 	"github.com/multiversx/mx-chain-core-go/data/smartContractResult"
 	"github.com/multiversx/mx-chain-core-go/data/stateChange"
 	"github.com/multiversx/mx-chain-core-go/data/transaction"
@@ -49,7 +50,17 @@ func (ei *eventsInterceptor) GetStateAccessesPerAccounts(eventsData *data.ArgsSa
 	return ei.getStateAccessesPerAccounts(eventsData, hex.EncodeToString(eventsData.HeaderHash), eventsData.TransactionsPool)
 }
 
+// GetStateAccessesPerAccountsV3 -
+func (ei *eventsInterceptor) GetStateAccessesPerAccountsV3(eventsData *data.ArgsSaveBlockData) map[string]*stateChange.StateAccesses {
+	return ei.getStateAccessesPerAccountsV3(eventsData, hex.EncodeToString(eventsData.HeaderHash), eventsData.TransactionsPool)
+}
+
 // BaseNilEventsDataCheks -
 func BaseNilEventsDataCheks(eventsData *data.ArgsSaveBlockData) error {
 	return baseNilEventsDataChecks(eventsData)
+}
+
+// GetTxsWithOrder exports internal method for testing
+func GetTxsWithOrder(transactionsPool *outport.TransactionPool) []txWithOrder {
+	return getTxsWithOrder(transactionsPool)
 }

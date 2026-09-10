@@ -14,6 +14,7 @@ type DispatcherStub struct {
 	FinalizedEventCalled     func(event data.FinalizedBlock)
 	TxsEventCalled           func(event data.BlockTxs)
 	ScrsEventCalled          func(event data.BlockScrs)
+	AlteredAccountsCalled    func(event data.AlteredAccountsEvent)
 	StateAccessesEventCalled func(event data.BlockStateAccesses)
 }
 
@@ -65,6 +66,13 @@ func (d *DispatcherStub) TxsEvent(event data.BlockTxs) {
 func (d *DispatcherStub) ScrsEvent(event data.BlockScrs) {
 	if d.ScrsEventCalled != nil {
 		d.ScrsEventCalled(event)
+	}
+}
+
+// AlteredAccounts -
+func (d *DispatcherStub) AlteredAccounts(event data.AlteredAccountsEvent) {
+	if d.AlteredAccountsCalled != nil {
+		d.AlteredAccountsCalled(event)
 	}
 }
 

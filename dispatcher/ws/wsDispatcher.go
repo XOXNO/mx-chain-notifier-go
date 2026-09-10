@@ -32,6 +32,9 @@ const (
 	pongWait   = 60 * time.Second
 	pingPeriod = (pongWait * 9) / 10
 	maxMsgSize = 1024 * 1024
+	// raised from 256 for throughput; trySend drops a subscriber once this fills,
+	// so this only widens the burst a slow-but-alive subscriber may absorb
+	sendChanBuffSize = 10000
 )
 
 var (
@@ -50,6 +53,8 @@ type websocketDispatcher struct {
 	id         uuid.UUID
 	wg         sync.WaitGroup
 	send       chan []byte
+	mutSend    sync.RWMutex
+	sendClosed bool
 	conn       dispatcher.WSConnection
 	dispatcher dispatcher.Dispatcher
 	marshaller marshal.Marshalizer
@@ -69,7 +74,7 @@ func newWebSocketDispatcher(args argsWebSocketDispatcher) (*websocketDispatcher,
 
 	return &websocketDispatcher{
 		id:         uuid.New(),
-		send:       make(chan []byte, 10000), // Increased from 256 to 10000 for better throughput
+		send:       make(chan []byte, sendChanBuffSize),
 		conn:       args.Conn,
 		dispatcher: args.Dispatcher,
 		marshaller: args.Marshaller,
@@ -79,6 +84,51 @@ func newWebSocketDispatcher(args argsWebSocketDispatcher) (*websocketDispatcher,
 // GetID returns the id corresponding to this dispatcher instance
 func (wd *websocketDispatcher) GetID() uuid.UUID {
 	return wd.id
+}
+
+// trySend attempts a non-blocking send on the dispatcher's send channel.
+// If the channel's buffer is full - meaning the subscriber isn't reading fast
+// enough, or at all - the connection is closed instead of blocking, so that
+// callers (the hub's publish path) never stall waiting on a stuck subscriber.
+func (wd *websocketDispatcher) trySend(payload []byte) {
+	isBufferFull := wd.sendPayload(payload)
+	if !isBufferFull {
+		return
+	}
+
+	log.Warn("dispatcher send buffer full, dropping subscriber", "dispatcherID", wd.id)
+	if err := wd.conn.Close(); err != nil {
+		log.Debug("failed to close socket after full send buffer", "err", err.Error())
+	}
+}
+
+func (wd *websocketDispatcher) sendPayload(payload []byte) bool {
+	wd.mutSend.RLock()
+	defer wd.mutSend.RUnlock()
+
+	if wd.sendClosed {
+		return false
+	}
+
+	select {
+	case wd.send <- payload:
+		return false
+	default:
+		return true
+	}
+}
+
+// closeSend closes the send channel exactly once, synchronized against
+// trySend so no goroutine can send on an already-closed channel.
+func (wd *websocketDispatcher) closeSend() {
+	wd.mutSend.Lock()
+	defer wd.mutSend.Unlock()
+
+	if wd.sendClosed {
+		return
+	}
+	wd.sendClosed = true
+	close(wd.send)
 }
 
 // PushEvents receives an events slice and processes it before pushing to socket
@@ -98,7 +148,7 @@ func (wd *websocketDispatcher) PushEvents(events []data.Event) {
 		return
 	}
 
-	wd.send <- wsEventBytes
+	wd.trySend(wsEventBytes)
 }
 
 // RevertEvent receives a reverted block event and process it before pushing to socket
@@ -118,7 +168,7 @@ func (wd *websocketDispatcher) RevertEvent(event data.RevertBlock) {
 		return
 	}
 
-	wd.send <- wsEventBytes
+	wd.trySend(wsEventBytes)
 }
 
 // FinalizedEvent receives a finalized block event and process it before pushing to socket
@@ -138,7 +188,7 @@ func (wd *websocketDispatcher) FinalizedEvent(event data.FinalizedBlock) {
 		return
 	}
 
-	wd.send <- wsEventBytes
+	wd.trySend(wsEventBytes)
 }
 
 // TxsEvent receives a block txs event and process it before pushing to socket
@@ -158,7 +208,7 @@ func (wd *websocketDispatcher) TxsEvent(event data.BlockTxs) {
 		return
 	}
 
-	wd.send <- wsEventBytes
+	wd.trySend(wsEventBytes)
 }
 
 // BlockEvents receives block events with data and processes it before pushing to socket
@@ -178,7 +228,7 @@ func (wd *websocketDispatcher) BlockEvents(event data.BlockEventsWithOrder) {
 		return
 	}
 
-	wd.send <- wsEventBytes
+	wd.trySend(wsEventBytes)
 }
 
 // ScrsEvent receives a block scrs event and process it before pushing to socket
@@ -198,7 +248,7 @@ func (wd *websocketDispatcher) ScrsEvent(event data.BlockScrs) {
 		return
 	}
 
-	wd.send <- wsEventBytes
+	wd.trySend(wsEventBytes)
 }
 
 // AlteredAccounts receives a block scrs event and process it before pushing to socket
@@ -218,7 +268,7 @@ func (wd *websocketDispatcher) AlteredAccounts(event data.AlteredAccountsEvent) 
 		return
 	}
 
-	wd.send <- wsEventBytes
+	wd.trySend(wsEventBytes)
 }
 
 // StateAccessesEvent receives a block state accesses event and process it before pushing to socket
@@ -238,7 +288,7 @@ func (wd *websocketDispatcher) StateAccessesEvent(event data.BlockStateAccesses)
 		return
 	}
 
-	wd.send <- wsEventBytes
+	wd.trySend(wsEventBytes)
 }
 
 // writePump listens on the send-channel and pushes data on the socket stream
@@ -306,7 +356,7 @@ func (wd *websocketDispatcher) readPump() {
 		if err := wd.conn.Close(); err != nil {
 			log.Error("failed to close socket on defer", "err", err.Error())
 		}
-		close(wd.send)
+		wd.closeSend()
 	}()
 
 	if err := wd.setSocketReadLimits(); err != nil {

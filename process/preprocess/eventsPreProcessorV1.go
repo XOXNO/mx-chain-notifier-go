@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/multiversx/mx-chain-core-go/core"
+	coreData "github.com/multiversx/mx-chain-core-go/data"
 	"github.com/multiversx/mx-chain-core-go/data/outport"
 	logger "github.com/multiversx/mx-chain-logger-go"
 	"github.com/multiversx/mx-chain-notifier-go/data"
@@ -48,20 +49,24 @@ func (d *eventsPreProcessorV1) SaveBlock(marshalledData []byte) error {
 		return err
 	}
 
+	// nil check must stay ahead of the HeaderHash dereference below
+	if outportBlock.BlockData == nil {
+		return ErrNilBlockData
+	}
+
 	blockHash := hex.EncodeToString(outportBlock.BlockData.HeaderHash)
 	preprocessorLog.Info("eventsPreProcessorV1: processing SaveBlock", "blockHash", blockHash)
-
-	err = checkBlockDataValid(outportBlock)
-	if err != nil {
-		preprocessorLog.Error("eventsPreProcessorV1: SaveBlock validation failed", "blockHash", blockHash, "error", err)
-		return err
-	}
 
 	headerType := core.HeaderType(outportBlock.BlockData.HeaderType)
 
 	header, err := d.getHeaderFromBytes(headerType, outportBlock.BlockData.HeaderBytes)
 	if err != nil {
 		preprocessorLog.Error("eventsPreProcessorV1: failed to parse SaveBlock header", "blockHash", blockHash, "error", err)
+		return err
+	}
+
+	err = checkHeaderGasConsumption(header, outportBlock)
+	if err != nil {
 		return err
 	}
 
@@ -81,7 +86,8 @@ func (d *eventsPreProcessorV1) SaveBlock(marshalledData []byte) error {
 		TransactionsPool:       outportBlock.TransactionPool,
 		Header:                 header,
 		HeaderTimeStampMs:      outportBlock.BlockData.GetTimestampMs(),
-		StateAccesses:          outportBlock.GetStateAccessesForBlock(),
+		StateAccesses:          outportBlock.GetStateAccesses(),
+		StateAccessesForBlock:  outportBlock.GetStateAccessesForBlock(),
 		Results:                executionResults,
 	}
 
@@ -94,12 +100,22 @@ func (d *eventsPreProcessorV1) SaveBlock(marshalledData []byte) error {
 	return nil
 }
 
-func checkBlockDataValid(block *outport.OutportBlock) error {
-	if block.BlockData == nil {
-		return ErrNilBlockData
+func checkHeaderGasConsumption(header coreData.HeaderHandler, block *outport.OutportBlock) error {
+	if !header.IsHeaderV3() {
+		if block.HeaderGasConsumption == nil {
+			return ErrNilHeaderGasConsumption
+		}
+
+		return nil
 	}
-	if block.HeaderGasConsumption == nil {
-		return ErrNilHeaderGasConsumption
+
+	for _, execRes := range block.BlockData.Results {
+		if execRes == nil {
+			continue
+		}
+		if execRes.HeaderGasConsumption == nil {
+			return ErrNilHeaderGasConsumption
+		}
 	}
 
 	return nil

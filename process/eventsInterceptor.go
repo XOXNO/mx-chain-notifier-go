@@ -19,9 +19,19 @@ import (
 	"github.com/multiversx/mx-chain-notifier-go/data"
 )
 
+type txType int
+
+const (
+	normalTx txType = iota
+	scr
+	rewardTx
+	invalidTx
+)
+
 type txWithOrder struct {
-	hash  string
-	index uint32
+	Hash   string
+	Index  uint32
+	TxType txType
 }
 
 // logEvent defines a log event associated with corresponding tx hash
@@ -86,9 +96,14 @@ func (ei *eventsInterceptor) ProcessBlockEvents(eventsData *data.ArgsSaveBlockDa
 	events := ei.getLogEventsFromTransactionsPool(transactionsPool.Logs, scrs)
 	stateAccessesPerAccounts := ei.getStateAccessesPerAccounts(eventsData, hex.EncodeToString(eventsData.HeaderHash), transactionsPool)
 
-	accounts := make([]*alteredAccount.AlteredAccount, 0, len(eventsData.AlteredAccounts))
-	for _, account := range eventsData.AlteredAccounts {
-		accounts = append(accounts, account)
+	// left nil when there are none, so the emitted payload keeps the previous
+	// `null` representation instead of switching to `[]` for every block
+	var accounts []*alteredAccount.AlteredAccount
+	if len(eventsData.AlteredAccounts) > 0 {
+		accounts = make([]*alteredAccount.AlteredAccount, 0, len(eventsData.AlteredAccounts))
+		for _, account := range eventsData.AlteredAccounts {
+			accounts = append(accounts, account)
+		}
 	}
 
 	return &data.InterceptorBlockData{
@@ -125,9 +140,14 @@ func (ei *eventsInterceptor) ProcessBlockEventsV3(eventsData *data.ArgsSaveBlock
 		return execBlocksData, nil
 	}
 
-	accounts := make([]*alteredAccount.AlteredAccount, 0, len(eventsData.AlteredAccounts))
-	for _, account := range eventsData.AlteredAccounts {
-		accounts = append(accounts, account)
+	// left nil when there are none, so the emitted payload keeps the previous
+	// `null` representation instead of switching to `[]` for every block
+	var accounts []*alteredAccount.AlteredAccount
+	if len(eventsData.AlteredAccounts) > 0 {
+		accounts = make([]*alteredAccount.AlteredAccount, 0, len(eventsData.AlteredAccounts))
+		for _, account := range eventsData.AlteredAccounts {
+			accounts = append(accounts, account)
+		}
 	}
 
 	for headerHash, execBlockData := range eventsData.Results {
@@ -139,7 +159,7 @@ func (ei *eventsInterceptor) ProcessBlockEventsV3(eventsData *data.ArgsSaveBlock
 		body := execBlockData.Body
 		scrs := getScrsFromPool(transactionsPool)
 		events := ei.getLogEventsFromTransactionsPool(transactionsPool.GetLogs(), scrs)
-		stateAccessesPerAccounts := ei.getStateAccessesPerAccounts(eventsData, headerHash, transactionsPool)
+		stateAccessesPerAccounts := ei.getStateAccessesPerAccountsV3(eventsData, headerHash, transactionsPool)
 
 		blockData := &data.InterceptorBlockData{
 			Hash:                     headerHash,
@@ -158,6 +178,10 @@ func (ei *eventsInterceptor) ProcessBlockEventsV3(eventsData *data.ArgsSaveBlock
 
 		execBlocksData = append(execBlocksData, blockData)
 	}
+
+	sort.Slice(execBlocksData, func(i, j int) bool {
+		return execBlocksData[i].Nonce < execBlocksData[j].Nonce
+	})
 
 	return execBlocksData, nil
 }
@@ -183,31 +207,52 @@ func getTxsFromPool(transactionsPool *outport.TransactionPool) map[string]*trans
 }
 
 func getTxsWithOrder(transactionsPool *outport.TransactionPool) []txWithOrder {
-	txsWithOrderMap := make(map[string]uint32)
+	// This map is needed because of duplicated transactions.
+	// There can be a case when a transaction is included in the block, but also marked as invalid, so it will be present
+	// in both transactions and invalidTxs maps from transactions pool, with the same execution order. In that case,
+	// we want to make sure that we process that transaction only as invalid.
+	numTxs := len(transactionsPool.Transactions) +
+		len(transactionsPool.SmartContractResults) +
+		len(transactionsPool.Rewards) +
+		len(transactionsPool.InvalidTxs)
+	txsWithOrderMap := make(map[string]txWithOrder, numTxs)
 
 	for txHash, txInfo := range transactionsPool.Transactions {
-		txsWithOrderMap[txHash] = txInfo.ExecutionOrder
+		txsWithOrderMap[txHash] = txWithOrder{
+			Hash:   txHash,
+			Index:  txInfo.ExecutionOrder,
+			TxType: normalTx,
+		}
 	}
 	for txHash, txInfo := range transactionsPool.SmartContractResults {
-		txsWithOrderMap[txHash] = txInfo.ExecutionOrder
+		txsWithOrderMap[txHash] = txWithOrder{
+			Hash:   txHash,
+			Index:  txInfo.ExecutionOrder,
+			TxType: scr,
+		}
 	}
 	for txHash, txInfo := range transactionsPool.Rewards {
-		txsWithOrderMap[txHash] = txInfo.ExecutionOrder
+		txsWithOrderMap[txHash] = txWithOrder{
+			Hash:   txHash,
+			Index:  txInfo.ExecutionOrder,
+			TxType: rewardTx,
+		}
 	}
 	for txHash, txInfo := range transactionsPool.InvalidTxs {
-		txsWithOrderMap[txHash] = txInfo.ExecutionOrder
+		txsWithOrderMap[txHash] = txWithOrder{
+			Hash:   txHash,
+			Index:  txInfo.ExecutionOrder,
+			TxType: invalidTx,
+		}
 	}
 
 	txsWithOrder := make([]txWithOrder, 0, len(txsWithOrderMap))
-	for txHash, index := range txsWithOrderMap {
-		txsWithOrder = append(txsWithOrder, txWithOrder{
-			hash:  txHash,
-			index: index,
-		})
+	for _, txWithData := range txsWithOrderMap {
+		txsWithOrder = append(txsWithOrder, txWithData)
 	}
 
 	sort.Slice(txsWithOrder, func(i, j int) bool {
-		return txsWithOrder[i].index < txsWithOrder[j].index
+		return txsWithOrder[i].Index < txsWithOrder[j].Index
 	})
 
 	return txsWithOrder
@@ -227,39 +272,70 @@ func (ei *eventsInterceptor) getStateAccessesPerAccounts(
 		return make(map[string]*stateChange.StateAccesses)
 	}
 
-	stateAccessesPerAccounts := make(map[string]*stateChange.StateAccesses)
-	stateAccessesPerTxs, ok := eventsData.StateAccesses[headerHash]
+	stateAccesses := eventsData.StateAccesses
+
+	return ei.fetchStateAccessesPerAccounts(stateAccesses, transactionPool)
+}
+
+func (ei *eventsInterceptor) getStateAccessesPerAccountsV3(
+	eventsData *data.ArgsSaveBlockData,
+	headerHash string,
+	transactionPool *outport.TransactionPool,
+) map[string]*stateChange.StateAccesses {
+	stateAccessesPerBlock, ok := eventsData.StateAccessesForBlock[headerHash]
 	if !ok {
-		log.Debug("getStateAccessesPerAccounts failed: will return empty state accesses per accounts",
+		log.Debug("stateAccessesPerBlock failed: will return empty state accesses per accounts",
 			"block hash", headerHash,
 		)
-		return stateAccessesPerAccounts
+
+		return make(map[string]*stateChange.StateAccesses)
 	}
 
-	if stateAccessesPerTxs == nil {
-		log.Debug("stateAccessesPerTxs failed: will return empty state accesses per accounts",
+	if stateAccessesPerBlock == nil {
+		log.Debug("stateAccessesPerBlock failed: will return empty state accesses per accounts",
 			"block hash", headerHash,
-			"num state accesses", len(eventsData.StateAccesses),
+			"num state accesses for block", len(eventsData.StateAccessesForBlock),
 		)
-		return stateAccessesPerAccounts
+
+		return make(map[string]*stateChange.StateAccesses)
 	}
 
-	stateAccesses := stateAccessesPerTxs.StateAccesses
+	stateAccesses := stateAccessesPerBlock.StateAccesses
+
+	return ei.fetchStateAccessesPerAccounts(stateAccesses, transactionPool)
+}
+
+func (ei *eventsInterceptor) fetchStateAccessesPerAccounts(
+	stateAccesses map[string]*stateChange.StateAccesses,
+	transactionPool *outport.TransactionPool,
+) map[string]*stateChange.StateAccesses {
+	if stateAccesses == nil {
+		return make(map[string]*stateChange.StateAccesses)
+	}
+
+	stateAccessesPerAccounts := make(map[string]*stateChange.StateAccesses)
+
 	logStateAccessesPerTxs(stateAccesses)
 
 	// txs hashes with order
 	txsWithOrder := getTxsWithOrder(transactionPool)
 
 	for _, txInfo := range txsWithOrder {
-		txHash, err := hex.DecodeString(txInfo.hash)
+		txHash, err := hex.DecodeString(txInfo.Hash)
 		if err != nil {
-			log.Error("failed to decode tx hash", "txHash", txInfo.hash)
+			log.Error("failed to decode tx hash", "txHash", txInfo.Hash)
 			continue
 		}
 
 		stateAccessesPerTx, ok := stateAccesses[string(txHash)]
 		if !ok {
-			log.Warn("did not find state accesses for tx", "txHash", txInfo.hash)
+			if txInfo.TxType == scr {
+				// there are cases when SCRs are generated but no state accesses are produced, so we will not log a warning in those cases
+				log.Trace("SCR with no state accesses", "txHash", txInfo.Hash)
+				continue
+			}
+
+			log.Warn("did not find state accesses for tx", "txHash", txInfo.Hash, "txType", txInfo.TxType)
 			continue
 		}
 

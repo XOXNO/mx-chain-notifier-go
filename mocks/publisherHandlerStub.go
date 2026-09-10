@@ -10,6 +10,7 @@ type PublisherHandlerStub struct {
 	PublishTxsCalled                  func(blockTxs data.BlockTxs)
 	PublishScrsCalled                 func(blockScrs data.BlockScrs)
 	PublishBlockEventsWithOrderCalled func(blockTxs data.BlockEventsWithOrder)
+	PublishAlteredAccountsCalled      func(accounts data.AlteredAccountsEvent)
 	PublishBlockStateAccessesCalled   func(stateAccesses data.BlockStateAccesses)
 	CloseCalled                       func() error
 }
@@ -53,6 +54,13 @@ func (p *PublisherHandlerStub) PublishScrs(blockScrs data.BlockScrs) {
 func (p *PublisherHandlerStub) PublishBlockEventsWithOrder(blockTxs data.BlockEventsWithOrder) {
 	if p.PublishBlockEventsWithOrderCalled != nil {
 		p.PublishBlockEventsWithOrderCalled(blockTxs)
+	}
+}
+
+// PublishAlteredAccounts -
+func (p *PublisherHandlerStub) PublishAlteredAccounts(accounts data.AlteredAccountsEvent) {
+	if p.PublishAlteredAccountsCalled != nil {
+		p.PublishAlteredAccountsCalled(accounts)
 	}
 }
 

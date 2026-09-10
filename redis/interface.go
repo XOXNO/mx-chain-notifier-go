@@ -13,6 +13,8 @@ type LockService interface {
 	IsEventProcessed(ctx context.Context, blockHash string) (bool, error)
 	IsCrossShardConfirmation(ctx context.Context, originalTxHash string, event data.EventDuplicateCheck) (bool, error)
 	SetBlockTimestamp(ctx context.Context, blockHash string, timestamp uint64) error
+	TryLock(ctx context.Context, key string) (bool, error)
+	Unlock(ctx context.Context, key string) error
 	HasConnection(ctx context.Context) bool
 	IsInterfaceNil() bool
 }
@@ -20,6 +22,7 @@ type LockService interface {
 // RedLockClient defines the behaviour of a cache handler component
 type RedLockClient interface {
 	SetEntry(ctx context.Context, key string, value bool, ttl time.Duration) (bool, error)
+	DeleteEntry(ctx context.Context, key string) error
 	AddEventToList(ctx context.Context, key string, value string, ttl time.Duration) (int64, error)
 	HasEvent(ctx context.Context, key string, value string) (bool, error)
 	SetTimestamp(ctx context.Context, key string, timestamp uint64, ttl time.Duration) error

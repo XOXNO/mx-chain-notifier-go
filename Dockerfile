@@ -1,4 +1,4 @@
-FROM golang:1.23.6 AS builder
+FROM golang:1.26.2 AS builder
 
 LABEL maintainer="MultiversX"
 
@@ -23,4 +23,5 @@ EXPOSE 8080 22111 80 443 5000
 
 WORKDIR /multiversx
 
-CMD ["./notifier", "--publisher-type", "servicebus"]
+ENTRYPOINT ["./notifier"]
+CMD ["--publisher-type", "servicebus"]

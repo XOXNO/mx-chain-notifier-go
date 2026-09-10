@@ -43,6 +43,9 @@ func (r *redlockWrapper) IsEventProcessed(ctx context.Context, blockHash string)
 	return r.client.SetEntry(ctx, blockHash, true, r.ttl)
 }
 
+// IsCrossShardConfirmation returns true if the very same event was already seen for the given
+// original tx hash. Cross-shard execution can surface the same logical event more than once
+// (once per involved shard), so events are deduplicated by their full marshalled content.
 func (r *redlockWrapper) IsCrossShardConfirmation(ctx context.Context, originalTxHash string, event data.EventDuplicateCheck) (bool, error) {
 	jsonData, err := json.Marshal(event)
 	if err != nil {
@@ -75,6 +78,20 @@ func (r *redlockWrapper) SetBlockTimestamp(ctx context.Context, blockHash string
 	key := fmt.Sprintf("block:timestamp:%s", blockHash)
 	timestampTTL := time.Hour // 1 hour TTL for block timestamps
 	return r.client.SetTimestamp(ctx, key, timestamp, timestampTTL)
+}
+
+// TryLock attempts to acquire a mutual-exclusion lock for the given key,
+// returning true if it was acquired. Unlike IsEventProcessed, a lock
+// acquired here is meant to be released with Unlock once the caller is done;
+// the TTL only bounds how long the lock can be held if the caller crashes
+// before releasing it.
+func (r *redlockWrapper) TryLock(ctx context.Context, key string) (bool, error) {
+	return r.client.SetEntry(ctx, key, true, r.ttl)
+}
+
+// Unlock releases a lock previously acquired with TryLock.
+func (r *redlockWrapper) Unlock(ctx context.Context, key string) error {
+	return r.client.DeleteEntry(ctx, key)
 }
 
 // HasConnection returns true if the redis client is connected

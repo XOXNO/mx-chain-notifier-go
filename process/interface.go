@@ -12,6 +12,8 @@ type LockService interface {
 	IsEventProcessed(ctx context.Context, blockHash string) (bool, error)
 	IsCrossShardConfirmation(ctx context.Context, originalTxHash string, event data.EventDuplicateCheck) (bool, error)
 	SetBlockTimestamp(ctx context.Context, blockHash string, timestamp uint64) error
+	TryLock(ctx context.Context, key string) (bool, error)
+	Unlock(ctx context.Context, key string) error
 	HasConnection(ctx context.Context) bool
 	IsInterfaceNil() bool
 }

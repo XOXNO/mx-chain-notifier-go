@@ -19,12 +19,23 @@ func (drw *disabledRedlockWrapper) IsEventProcessed(_ context.Context, _ string)
 	return true, nil
 }
 
-func (drw *disabledRedlockWrapper) IsCrossShardConfirmation(ctx context.Context, originalTxHash string, event data.EventDuplicateCheck) (bool, error) {
+// IsCrossShardConfirmation returns true and nil
+func (drw *disabledRedlockWrapper) IsCrossShardConfirmation(_ context.Context, _ string, _ data.EventDuplicateCheck) (bool, error) {
 	return true, nil
 }
 
 // SetBlockTimestamp does nothing and returns nil
 func (drw *disabledRedlockWrapper) SetBlockTimestamp(_ context.Context, _ string, _ uint64) error {
+	return nil
+}
+
+// TryLock returns true and nil
+func (drw *disabledRedlockWrapper) TryLock(_ context.Context, _ string) (bool, error) {
+	return true, nil
+}
+
+// Unlock returns nil
+func (drw *disabledRedlockWrapper) Unlock(_ context.Context, _ string) error {
 	return nil
 }
 
