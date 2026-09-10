@@ -131,10 +131,9 @@ func (ei *eventsInterceptor) ProcessBlockEventsV3(eventsData *data.ArgsSaveBlock
 		return nil, coreData.ErrInvalidHeaderType
 	}
 
-	if eventsData.Results == nil {
-		return nil, ErrNilExecutionResults
-	}
-
+	// a decoded payload cannot distinguish a nil Results map from an empty one, since
+	// protobuf encodes an empty map as nothing and decodes an absent map to nil. Both
+	// mean the same thing: this V3 block carries no execution results.
 	execBlocksData := make([]*data.InterceptorBlockData, 0)
 	if len(eventsData.Results) == 0 {
 		return execBlocksData, nil

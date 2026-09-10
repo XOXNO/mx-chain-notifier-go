@@ -509,6 +509,31 @@ func TestProcessBlockEvents_WithExecutionResults(t *testing.T) {
 		require.Nil(t, err)
 		require.Equal(t, expEvents, events)
 	})
+
+	t.Run("nil execution results should be treated as empty, not an error", func(t *testing.T) {
+		t.Parallel()
+
+		eventsInterceptor, _ := process.NewEventsInterceptor(createMockEventsInterceptorArgs())
+
+		// protobuf encodes an empty map as nothing and decodes an absent map to nil, so a
+		// nil Results map is exactly what a V3 block carrying no execution results looks
+		// like once unmarshalled - it must not be rejected as malformed
+		blockEvents := data.ArgsSaveBlockData{
+			HeaderHash: []byte("blockHash"),
+			Body: &block.Body{
+				MiniBlocks: make([]*block.MiniBlock, 1),
+			},
+			Header: &block.HeaderV3{
+				ShardID:     1,
+				TimestampMs: 1234,
+			},
+			Results: nil,
+		}
+
+		events, err := eventsInterceptor.ProcessBlockEventsV3(&blockEvents)
+		require.Nil(t, err)
+		require.Equal(t, []*data.InterceptorBlockData{}, events)
+	})
 }
 
 func TestProcessBlockEventsV3_DeterministicNonceOrder(t *testing.T) {
