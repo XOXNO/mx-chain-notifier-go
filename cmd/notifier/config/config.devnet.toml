@@ -46,6 +46,18 @@
     # The duration in seconds to wait for an acknowledgment message, after this time passes an error will be returned
     AcknowledgeTimeoutInSec = 60
 
+    # AsyncAck sends the ack as soon as a payload is queued, instead of after it was processed (Redis, publishers).
+    # This keeps the observer from stalling on notifier latency, but payloads that were acked and not yet processed
+    # are lost if this process dies, and payloads that keep failing are dropped after AsyncAckMaxRetries.
+    # A full queue delays the ack, which slows the observer down instead of growing memory.
+    AsyncAck = false
+
+    # Capacity of the queue kept for each shard (order is preserved within a shard). 0 uses the default of 1024
+    AsyncAckQueueSize = 1024
+
+    # Processing attempts, with backoff, before an acked payload is dropped. 0 uses the default of 5
+    AsyncAckMaxRetries = 5
+
 [ConnectorApi]
     # Enabled will determine if http connector will be enabled or not.
     # It will determine if http connector endpoints will be created.

@@ -111,6 +111,11 @@ type WebSocketConfig struct {
 	BlockingAckOnError         bool
 	DropMessagesIfNoConnection bool
 
+	// AsyncAck acknowledges a payload once it is queued instead of after it was processed
+	AsyncAck           bool
+	AsyncAckQueueSize  uint32
+	AsyncAckMaxRetries uint32
+
 	DataMarshallerType string
 }
 

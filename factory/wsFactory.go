@@ -16,6 +16,8 @@ import (
 const (
 	readBufferSize  = 64 * 1024 // Increased from 1KB to 64KB for better throughput
 	writeBufferSize = 64 * 1024 // Increased from 1KB to 64KB for better throughput
+
+	gogoProtobufMarshaller = "gogo protobuf"
 )
 
 // CreateWSHandler creates websocket handler component based on api type
@@ -75,6 +77,18 @@ func createWsObsConnector(
 	payloadHandler, err := CreatePayloadHandler(marshaller, facade)
 	if err != nil {
 		return nil, err
+	}
+
+	if config.AsyncAck {
+		payloadHandler, err = process.NewAsyncPayloadHandler(process.ArgsAsyncPayloadHandler{
+			Handler:    payloadHandler,
+			QueueSize:  config.AsyncAckQueueSize,
+			MaxRetries: config.AsyncAckMaxRetries,
+			ShardLanes: config.DataMarshallerType == gogoProtobufMarshaller,
+		})
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	err = host.SetPayloadHandler(payloadHandler)

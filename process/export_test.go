@@ -64,3 +64,6 @@ func BaseNilEventsDataCheks(eventsData *data.ArgsSaveBlockData) error {
 func GetTxsWithOrder(transactionsPool *outport.TransactionPool) []txWithOrder {
 	return getTxsWithOrder(transactionsPool)
 }
+
+// LeadingShardID -
+func LeadingShardID(payload []byte) uint32 { return leadingShardID(payload) }
